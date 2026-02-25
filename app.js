@@ -21,6 +21,13 @@ const THEME_BACKGROUND_MAP = {
   indoor: "assets/themes/indoor.png",
 };
 
+const THEME_LABEL_MAP = {
+  garden: "Garden",
+  forest: "Forest",
+  playground: "Playground",
+  indoor: "Baby Room",
+};
+
 const EGG_ASSET_PATHS = [
   "assets/eggs/egg01.png",
   "assets/eggs/egg02.png",
@@ -67,7 +74,7 @@ const PROP_ICON_MAP = {
 
 const setupScreen = document.getElementById("setupScreen");
 const gameScreen = document.getElementById("gameScreen");
-const themeSelect = document.getElementById("themeSelect");
+const themePicker = document.getElementById("themePicker");
 const eggCountInput = document.getElementById("eggCount");
 const eggCountValue = document.getElementById("eggCountValue");
 const startHideBtn = document.getElementById("startHideBtn");
@@ -99,7 +106,6 @@ function showScreen(name) {
 
 function resetRound() {
   state.mode = "setup";
-  state.theme = themeSelect.value;
   state.totalEggs = Number(eggCountInput.value);
   state.eggs = [];
   state.sceneObjects = [];
@@ -111,6 +117,7 @@ function resetRound() {
   state.dragging = null;
   state.foundCount = 0;
   state.wandUses = 3;
+  renderThemePicker();
   renderPropPicker();
   renderScene();
   renderStatus();
@@ -119,7 +126,6 @@ function resetRound() {
 
 function startHideMode() {
   state.mode = "hide";
-  state.theme = themeSelect.value;
   state.totalEggs = Number(eggCountInput.value);
   state.eggs = [];
   state.sceneObjects = [];
@@ -149,6 +155,7 @@ function replayCurrentHunt() {
   state.wandUses = 3;
   state.eggs.forEach((egg) => {
     egg.found = false;
+    egg.foundAt = null;
   });
   state.selectedItem = null;
   state.dragging = null;
@@ -243,6 +250,7 @@ function randomEggRotation() {
 function buildEggTemplate() {
   return {
     found: false,
+    foundAt: null,
     pattern: randomPattern(),
     asset: randomEggAsset(),
     scale: 1,
@@ -288,6 +296,7 @@ function normalizeEgg(egg) {
   egg.scale = egg.scale ?? 1;
   egg.rotate = egg.rotate ?? 0;
   egg.flipX = egg.flipX === -1 ? -1 : 1;
+  egg.foundAt = egg.foundAt ?? null;
   egg.hitRadius = Number((4.9 * egg.scale).toFixed(2));
 }
 
@@ -398,6 +407,40 @@ function renderEggShelf() {
       event.dataTransfer.effectAllowed = "copyMove";
     });
     eggShelf.appendChild(shelfEgg);
+  });
+}
+
+function renderThemePicker() {
+  if (!themePicker) {
+    return;
+  }
+  themePicker.innerHTML = "";
+  Object.entries(THEME_BACKGROUND_MAP).forEach(([theme, imagePath]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `theme-option${state.theme === theme ? " selected" : ""}`;
+    btn.dataset.theme = theme;
+    btn.setAttribute("role", "radio");
+    btn.setAttribute("aria-checked", state.theme === theme ? "true" : "false");
+    btn.title = THEME_LABEL_MAP[theme] || theme;
+
+    const preview = document.createElement("span");
+    preview.className = "theme-option-preview";
+    preview.style.backgroundImage = `url("${imagePath}")`;
+    btn.appendChild(preview);
+
+    const name = document.createElement("span");
+    name.className = "theme-option-name";
+    name.textContent = THEME_LABEL_MAP[theme] || theme;
+    btn.appendChild(name);
+
+    btn.addEventListener("click", () => {
+      state.theme = theme;
+      renderThemePicker();
+      renderScene();
+    });
+
+    themePicker.appendChild(btn);
   });
 }
 
@@ -632,26 +675,42 @@ function handleFindTap(event) {
   );
 
   if (!match) {
-    scene.animate(
-      [
-        { transform: "translateX(0)" },
-        { transform: "translateX(-6px)" },
-        { transform: "translateX(6px)" },
-        { transform: "translateX(0)" },
-      ],
-      { duration: 180 }
-    );
     return;
   }
 
   match.found = true;
+  match.foundAt = Date.now();
   state.foundCount += 1;
   renderScene();
   renderStatus();
+  spawnFoundBurst(match);
 
   if (state.foundCount === state.totalEggs) {
     finishHunt();
   }
+}
+
+function spawnFoundBurst(egg) {
+  if (!egg || !scene) {
+    return;
+  }
+
+  const burst = document.createElement("div");
+  burst.className = "found-burst";
+  burst.style.left = `${egg.x}%`;
+  burst.style.top = `${egg.y}%`;
+
+  for (let i = 0; i < 8; i += 1) {
+    const sparkle = document.createElement("span");
+    sparkle.className = "sparkle";
+    sparkle.style.setProperty("--spark-angle", `${i * 45 + Math.floor(Math.random() * 12 - 6)}deg`);
+    sparkle.style.setProperty("--spark-distance", `${28 + Math.floor(Math.random() * 16)}px`);
+    sparkle.style.setProperty("--spark-delay", `${i * 20}ms`);
+    burst.appendChild(sparkle);
+  }
+
+  scene.appendChild(burst);
+  setTimeout(() => burst.remove(), 650);
 }
 
 function useHint() {
@@ -691,10 +750,12 @@ function renderScene() {
     const eggEl = document.createElement("div");
     const pattern = egg.pattern ?? 0;
     const hasAsset = Boolean(egg.asset);
-    eggEl.className = `egg${hasAsset ? " image-egg" : ` pattern-${pattern}`}${egg.found ? " found" : ""}`;
+    const justFound = egg.found && egg.foundAt && Date.now() - egg.foundAt < 900;
+    eggEl.className = `egg${hasAsset ? " image-egg" : ` pattern-${pattern}`}${egg.found ? " found" : ""}${justFound ? " found-pop" : ""}`;
     eggEl.style.left = `${egg.x}%`;
     eggEl.style.top = `${egg.y}%`;
     eggEl.style.setProperty("--egg-scale", String(egg.scale ?? 1));
+    eggEl.style.setProperty("--egg-found-scale", "1.9");
     eggEl.style.setProperty("--egg-rotate", `${egg.rotate ?? 0}deg`);
     eggEl.style.setProperty("--egg-flip-x", String(egg.flipX ?? 1));
     if (hasAsset) {
@@ -819,12 +880,6 @@ function finishHunt() {
   renderStatus();
 }
 
-themeSelect.addEventListener("change", () => {
-  state.theme = themeSelect.value;
-  state.selectedPropKind = COMMON_PROP_KINDS[0];
-  renderPropPicker();
-});
-
 eggCountInput.addEventListener("input", () => {
   eggCountValue.textContent = eggCountInput.value;
 });
@@ -902,4 +957,5 @@ scene.addEventListener("drop", (event) => {
 });
 scene.addEventListener("contextmenu", (event) => event.preventDefault());
 
+renderThemePicker();
 resetRound();
