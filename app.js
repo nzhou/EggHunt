@@ -851,7 +851,7 @@ function useHint() {
   ring.style.top = `${target.y}%`;
   scene.appendChild(ring);
 
-  setTimeout(() => ring.remove(), 1200);
+  setTimeout(() => ring.remove(), 1500);
 }
 
 function renderScene() {

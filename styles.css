@@ -588,7 +588,7 @@ button:disabled {
   transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 4px dashed rgba(255, 255, 255, 0.9);
-  animation: pulse 1.2s ease-out;
+  animation: pulse 500ms ease-out 3;
   pointer-events: none;
 }
 
