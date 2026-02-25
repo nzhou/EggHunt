@@ -1,0 +1,481 @@
+:root {
+  --bg: #fff8eb;
+  --card: #ffffff;
+  --ink: #233042;
+  --accent: #ff7f3f;
+  --accent-dark: #db5d1f;
+  --mint: #2f9b72;
+  --soft: #eef2f7;
+  --danger: #bf2d2d;
+  --shadow: 0 8px 24px rgba(35, 48, 66, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at top left, #fff4db 0%, #f8fbff 40%, #e9f6ff 100%);
+}
+
+.app {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.field {
+  margin-top: 12px;
+}
+
+label {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 6px;
+}
+
+select,
+input[type="range"] {
+  width: 100%;
+}
+
+select,
+button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+
+.secondary {
+  background: var(--mint);
+  color: #fff;
+}
+
+.ghost {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.statusbar {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.hide-tools {
+  margin-bottom: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.hide-tools[hidden] {
+  display: none !important;
+}
+
+.tool-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.tool-switch button {
+  flex: 1;
+}
+
+.active-tool {
+  background: var(--accent);
+  color: #fff;
+}
+
+.egg-shelf-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.egg-shelf-wrap[hidden] {
+  display: none !important;
+}
+
+#eggShelfLabel {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.egg-shelf {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  min-height: 64px;
+  align-items: center;
+}
+
+.shelf-egg {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 56px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  cursor: grab;
+}
+
+.shelf-egg.image-egg {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.shelf-prop {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  position: relative;
+}
+
+.shelf-prop.image-prop {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.shelf-prop-label {
+  font-size: 11px;
+  line-height: 1;
+  color: #233042;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  padding: 2px 5px;
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-transform: capitalize;
+}
+
+.transform-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%) rotate(var(--handle-rotate, 0deg));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #233042;
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid #ffcf8e;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+  cursor: grab;
+  user-select: none;
+}
+
+.transform-handle.rotate-handle {
+  border-color: #9fd7ff;
+}
+
+.transform-handle.scale-handle {
+  border-color: #ffd2e7;
+}
+
+.transform-handle.flip-handle {
+  border-color: #c9f2bf;
+}
+
+.transform-handle.delete-handle {
+  border-color: #ffb8b8;
+  color: #7f2323;
+}
+
+.scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 3px solid #fff;
+  touch-action: manipulation;
+  background-size: cover;
+  background-position: center;
+}
+
+.scene.drop-active {
+  outline: 3px dashed rgba(255, 255, 255, 0.8);
+  outline-offset: -8px;
+}
+
+.scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.24) 0 1.1%, transparent 1.2%),
+    radial-gradient(circle at 74% 22%, rgba(255, 255, 255, 0.2) 0 0.9%, transparent 1%),
+    radial-gradient(circle at 36% 12%, rgba(255, 250, 230, 0.2) 0 1%, transparent 1.1%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 35%, rgba(255, 255, 255, 0.08) 100%);
+}
+
+.scene.garden {
+  background-image:
+    radial-gradient(circle at 88% 16%, rgba(255, 247, 184, 0.92) 0 7%, transparent 8%),
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.78) 0 5%, transparent 6%),
+    radial-gradient(circle at 24% 20%, rgba(255, 255, 255, 0.78) 0 4%, transparent 5%),
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.78) 0 4%, transparent 5%),
+    radial-gradient(ellipse at 15% 95%, #80c97a 0 30%, transparent 31%),
+    radial-gradient(ellipse at 84% 98%, #6fbf79 0 36%, transparent 37%),
+    radial-gradient(ellipse at 50% 92%, #97d786 0 28%, transparent 29%),
+    linear-gradient(180deg, #b8e9ff 0%, #e8f6ff 42%, #f6f2dd 63%, #d8eeb2 100%);
+}
+
+.scene.forest {
+  background-image:
+    radial-gradient(circle at 83% 14%, rgba(255, 240, 174, 0.58) 0 7%, transparent 8%),
+    radial-gradient(circle at 14% 15%, rgba(226, 255, 244, 0.66) 0 4%, transparent 5%),
+    radial-gradient(circle at 20% 13%, rgba(226, 255, 244, 0.66) 0 3%, transparent 4%),
+    radial-gradient(ellipse at 20% 85%, #5f9d76 0 28%, transparent 29%),
+    radial-gradient(ellipse at 50% 89%, #4d8a68 0 34%, transparent 35%),
+    radial-gradient(ellipse at 82% 90%, #5a966f 0 30%, transparent 31%),
+    linear-gradient(180deg, #8ec4ac 0%, #b7dcc9 38%, #7eb28b 62%, #4d7b5e 100%);
+}
+
+.scene.playground {
+  background-image:
+    radial-gradient(circle at 84% 14%, rgba(255, 234, 133, 0.9) 0 7%, transparent 8%),
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.75) 0 4.5%, transparent 5.5%),
+    radial-gradient(circle at 25% 19%, rgba(255, 255, 255, 0.75) 0 3.5%, transparent 4.5%),
+    radial-gradient(ellipse at 16% 95%, #f3d593 0 32%, transparent 33%),
+    radial-gradient(ellipse at 50% 97%, #ecc77e 0 30%, transparent 31%),
+    radial-gradient(ellipse at 85% 96%, #efcf8b 0 34%, transparent 35%),
+    linear-gradient(180deg, #b6ddff 0%, #e7f4ff 38%, #f6e3af 63%, #f1cf8a 100%);
+}
+
+.scene.indoor {
+  background-image:
+    radial-gradient(circle at 86% 16%, rgba(255, 236, 165, 0.9) 0 7%, transparent 8%),
+    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.72) 0 4.2%, transparent 5%),
+    radial-gradient(ellipse at 22% 95%, #f1d4c4 0 34%, transparent 35%),
+    radial-gradient(ellipse at 78% 97%, #e9c6b6 0 36%, transparent 37%),
+    linear-gradient(180deg, #c8dcff 0%, #f2f6ff 34%, #ffe9de 60%, #f6d7cb 100%);
+}
+
+.egg {
+  position: absolute;
+  width: 38px;
+  height: 50px;
+  transform: translate(-50%, -50%) rotate(var(--egg-rotate, 0deg))
+    scaleX(var(--egg-flip-x, 1)) scale(var(--egg-scale, 1));
+  border-radius: 50% 50% 46% 46%;
+  border: 3px solid #fff;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.25),
+    0 0 12px rgba(255, 255, 255, 0.42) inset;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.egg.image-egg {
+  border: 0;
+  border-radius: 0;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+
+.egg.selected {
+  filter: drop-shadow(0 0 8px rgba(255, 245, 173, 0.95));
+}
+
+.egg.pattern-0 {
+  background: repeating-linear-gradient(
+    150deg,
+    #ffd9f4 0,
+    #ffd9f4 8px,
+    #ffc0e4 8px,
+    #ffc0e4 16px,
+    #fff5a9 16px,
+    #fff5a9 24px
+  );
+}
+
+.egg.pattern-1 {
+  background:
+    radial-gradient(circle at 30% 25%, #ffffff 0 3px, transparent 3px),
+    radial-gradient(circle at 70% 45%, #fff2a4 0 4px, transparent 4px),
+    radial-gradient(circle at 45% 75%, #ffffff 0 3px, transparent 3px),
+    linear-gradient(170deg, #9ad7ff 0%, #72c4ff 45%, #ffbee3 100%);
+}
+
+.egg.pattern-2 {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      #fff3ad 0,
+      #fff3ad 7px,
+      #ff9fcb 7px,
+      #ff9fcb 14px
+    ),
+    linear-gradient(160deg, #b7fff1 0%, #ffd6ee 100%);
+}
+
+.egg.pattern-3 {
+  background:
+    linear-gradient(
+      135deg,
+      #b8f1ff 0%,
+      #b8f1ff 25%,
+      #ffe3a8 25%,
+      #ffe3a8 50%,
+      #ffbddf 50%,
+      #ffbddf 75%,
+      #d4ffb8 75%,
+      #d4ffb8 100%
+    );
+}
+
+.egg.pattern-4 {
+  background:
+    radial-gradient(circle at 20% 30%, #ffffff 0 4px, transparent 4px),
+    radial-gradient(circle at 65% 20%, #ffffff 0 3px, transparent 3px),
+    radial-gradient(circle at 70% 70%, #ffffff 0 5px, transparent 5px),
+    linear-gradient(180deg, #ffa9d1 0%, #b4e8ff 50%, #fff0a8 100%);
+}
+
+.egg.found {
+  outline: 3px solid #fff;
+  box-shadow:
+    0 0 0 4px rgba(47, 155, 114, 0.62),
+    0 0 16px rgba(255, 247, 196, 0.72);
+  opacity: 1;
+  filter: none;
+}
+
+.scene-object {
+  position: absolute;
+  width: 74px;
+  height: 96px;
+  transform: translate(-50%, -50%) rotate(var(--rot, 0deg))
+    scaleX(var(--flip-x, 1)) scale(var(--scale, 1));
+  pointer-events: none;
+  z-index: 3;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-color: transparent;
+}
+
+.scene-object.selected {
+  filter: drop-shadow(0 0 8px rgba(255, 245, 173, 0.95));
+}
+
+.complete-panel {
+  margin-top: 10px;
+}
+
+.hint-ring {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 4px dashed rgba(255, 255, 255, 0.9);
+  animation: pulse 1.2s ease-out;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  from {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+@media (max-width: 680px) {
+  .actions {
+    flex-direction: column;
+  }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+}

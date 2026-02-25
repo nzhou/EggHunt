@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EggHunt Lite MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>EggHunt</h1>
+        <button id="restartBtn" class="ghost">Start Over</button>
+      </header>
+
+      <section id="setupScreen" class="card screen active" aria-labelledby="setupTitle">
+        <h2 id="setupTitle">Create a Hunt</h2>
+
+        <div class="field">
+          <label for="themeSelect">Theme</label>
+          <select id="themeSelect">
+            <option value="garden">Garden</option>
+            <option value="forest">Forest</option>
+            <option value="playground">Playground</option>
+            <option value="indoor">Indoor (Baby Room)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="eggCount">How many eggs?</label>
+          <input id="eggCount" type="range" min="3" max="12" value="6" />
+          <p><strong id="eggCountValue">6</strong> eggs</p>
+        </div>
+
+        <button id="startHideBtn" class="primary">Start Hiding Eggs</button>
+      </section>
+
+      <section id="gameScreen" class="screen" aria-live="polite">
+        <div class="card statusbar">
+          <p id="modeText">Hide Mode</p>
+          <p id="counterText">Placed: 0/6</p>
+          <p id="hintText" hidden>Wands left: 3</p>
+        </div>
+
+        <div id="hideToolsPanel" class="card hide-tools" hidden>
+          <div class="tool-switch">
+            <button id="eggToolBtn" class="ghost" type="button">Place Eggs</button>
+            <button id="propToolBtn" class="ghost" type="button">Place Props</button>
+          </div>
+          <div id="eggShelfWrap" class="egg-shelf-wrap" hidden>
+            <p id="eggShelfLabel">Egg Shelf (drag to scene)</p>
+            <div id="eggShelf" class="egg-shelf" aria-label="Egg shelf"></div>
+          </div>
+          <div id="propShelfWrap" class="egg-shelf-wrap" hidden>
+            <p id="propShelfLabel">Prop Shelf (drag to scene)</p>
+            <div id="propPicker" class="egg-shelf" aria-label="Prop shelf"></div>
+          </div>
+        </div>
+
+        <div id="scene" class="scene" role="button" tabindex="0" aria-label="Egg hunt scene"></div>
+
+        <div id="completePanel" class="card complete-panel" hidden>
+          <h2>All Eggs Found</h2>
+          <p id="winSummary"></p>
+          <div class="actions">
+            <button id="playAgainBtn" class="primary">Play Again</button>
+            <button id="newHuntBtn" class="secondary">New Hunt</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="nextBtn" class="primary" disabled>Pass to Finder</button>
+          <button id="hintBtn" class="secondary" hidden>Use Magic Wand</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

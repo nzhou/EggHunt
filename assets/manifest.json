@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "themes": {
+    "garden": {
+      "background": "assets/themes/garden.png",
+      "props": [
+        "assets/props/prop_bunny_01.png",
+        "assets/props/prop_chick_01.png",
+        "assets/props/prop_easter_flower_01.png",
+        "assets/props/prop_tulip_01.png",
+        "assets/props/prop_basket_01.png",
+        "assets/props/prop_carrot_01.png"
+      ],
+      "occluders": [
+        "assets/props/prop_bunny_01.png",
+        "assets/props/prop_chick_01.png",
+        "assets/props/prop_easter_flower_01.png",
+        "assets/props/prop_tulip_01.png",
+        "assets/props/prop_basket_01.png"
+      ]
+    },
+    "forest": {
+      "background": "assets/themes/forest.png",
+      "props": [
+        "assets/props/prop_bunny_02.png",
+        "assets/props/prop_chick_02.png",
+        "assets/props/prop_easter_flower_02.png",
+        "assets/props/prop_tulip_02.png",
+        "assets/props/prop_basket_02.png",
+        "assets/props/prop_carrot_02.png"
+      ],
+      "occluders": [
+        "assets/props/prop_bunny_02.png",
+        "assets/props/prop_chick_02.png",
+        "assets/props/prop_easter_flower_02.png",
+        "assets/props/prop_carrot_02.png",
+        "assets/props/prop_basket_02.png"
+      ]
+    },
+    "playground": {
+      "background": "assets/themes/playground.png",
+      "props": [
+        "assets/props/prop_bunny_03.png",
+        "assets/props/prop_chick_03.png",
+        "assets/props/prop_easter_flower_03.png",
+        "assets/props/prop_pinwheel_01.png",
+        "assets/props/prop_basket_03.png",
+        "assets/props/prop_carrot_03.png"
+      ],
+      "occluders": [
+        "assets/props/prop_bunny_03.png",
+        "assets/props/prop_chick_03.png",
+        "assets/props/prop_easter_flower_03.png",
+        "assets/props/prop_pinwheel_01.png",
+        "assets/props/prop_basket_03.png"
+      ]
+    },
+    "indoor": {
+      "background": "assets/themes/indoor.png",
+      "props": [
+        "assets/props/prop_plush_bunny_01.png",
+        "assets/props/prop_chick_04.png",
+        "assets/props/prop_tulip_03.png",
+        "assets/props/prop_basket_04.png",
+        "assets/props/prop_storybook_01.png",
+        "assets/props/prop_easter_flower_04.png"
+      ],
+      "occluders": [
+        "assets/props/prop_plush_bunny_01.png",
+        "assets/props/prop_chick_04.png",
+        "assets/props/prop_tulip_03.png",
+        "assets/props/prop_basket_04.png",
+        "assets/props/prop_storybook_01.png"
+      ]
+    }
+  },
+  "eggs": [
+    "assets/eggs/egg_pattern_stripes_01.png",
+    "assets/eggs/egg_pattern_dots_01.png",
+    "assets/eggs/egg_pattern_zigzag_01.png",
+    "assets/eggs/egg_pattern_floral_01.png",
+    "assets/eggs/egg_pattern_stars_01.png",
+    "assets/eggs/egg_pattern_hearts_01.png",
+    "assets/eggs/egg_pattern_checker_01.png",
+    "assets/eggs/egg_pattern_ribbon_01.png",
+    "assets/eggs/egg_pattern_gem_01.png",
+    "assets/eggs/egg_pattern_mixed_01.png"
+  ]
+}
