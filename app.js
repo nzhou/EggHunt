@@ -13,7 +13,10 @@ const state = {
   foundCount: 0,
   wandUses: 3,
   soundEnabled: true,
+  musicEnabled: true,
 };
+
+const BGM_PATH = "assets/audio/bgm_main.mp3";
 
 const THEME_BACKGROUND_MAP = {
   garden: "assets/themes/garden.png",
@@ -95,12 +98,14 @@ const propPicker = document.getElementById("propPicker");
 const nextBtn = document.getElementById("nextBtn");
 const hintBtn = document.getElementById("hintBtn");
 const restartBtn = document.getElementById("restartBtn");
+const musicToggleBtn = document.getElementById("musicToggleBtn");
 const soundToggleBtn = document.getElementById("soundToggleBtn");
 const playAgainBtn = document.getElementById("playAgainBtn");
 const newHuntBtn = document.getElementById("newHuntBtn");
 const winSummary = document.getElementById("winSummary");
 const completePanel = document.getElementById("completePanel");
 let audioCtx = null;
+let bgmAudio = null;
 
 function showScreen(name) {
   setupScreen.classList.toggle("active", name === "setup");
@@ -113,6 +118,39 @@ function updateSoundButton() {
   }
   soundToggleBtn.textContent = state.soundEnabled ? "🔊 Sound On" : "🔇 Sound Off";
   soundToggleBtn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+}
+
+function updateMusicButton() {
+  if (!musicToggleBtn) {
+    return;
+  }
+  musicToggleBtn.textContent = state.musicEnabled ? "🎵 Music On" : "🎵 Music Off";
+  musicToggleBtn.setAttribute("aria-pressed", state.musicEnabled ? "true" : "false");
+}
+
+function ensureBgmAudio() {
+  if (bgmAudio) {
+    return bgmAudio;
+  }
+  bgmAudio = new Audio(BGM_PATH);
+  bgmAudio.loop = true;
+  bgmAudio.preload = "auto";
+  bgmAudio.volume = 0.24;
+  return bgmAudio;
+}
+
+function syncBackgroundMusic() {
+  const audio = ensureBgmAudio();
+  if (!state.musicEnabled) {
+    audio.pause();
+    return;
+  }
+  const playPromise = audio.play();
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch(() => {
+      // autoplay can be blocked before a user interaction
+    });
+  }
 }
 
 function resetRound() {
@@ -970,6 +1008,13 @@ soundToggleBtn.addEventListener("click", () => {
   updateSoundButton();
 });
 
+musicToggleBtn.addEventListener("click", () => {
+  state.musicEnabled = !state.musicEnabled;
+  localStorage.setItem("egghunt_music_enabled", state.musicEnabled ? "1" : "0");
+  updateMusicButton();
+  syncBackgroundMusic();
+});
+
 startHideBtn.addEventListener("click", startHideMode);
 eggToolBtn.addEventListener("click", () => {
   state.hideTool = "eggs";
@@ -1047,6 +1092,19 @@ const savedSoundEnabled = localStorage.getItem("egghunt_sound_enabled");
 if (savedSoundEnabled === "0") {
   state.soundEnabled = false;
 }
+const savedMusicEnabled = localStorage.getItem("egghunt_music_enabled");
+if (savedMusicEnabled === "0") {
+  state.musicEnabled = false;
+}
+updateMusicButton();
 updateSoundButton();
+syncBackgroundMusic();
+document.addEventListener(
+  "pointerdown",
+  () => {
+    syncBackgroundMusic();
+  },
+  { once: true }
+);
 renderThemePicker();
 resetRound();
