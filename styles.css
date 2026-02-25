@@ -35,6 +35,11 @@ body {
   margin-bottom: 14px;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
 h1,
 h2,
 p {
@@ -609,6 +614,14 @@ button:disabled {
 }
 
 @media (max-width: 680px) {
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .topbar-actions button {
+    flex: 1;
+  }
+
   .theme-picker {
     grid-template-columns: 1fr;
   }
