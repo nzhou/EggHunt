@@ -20,12 +20,14 @@ body {
   font-family: "Avenir Next", "Trebuchet MS", sans-serif;
   color: var(--ink);
   background: radial-gradient(circle at top left, #fff4db 0%, #f8fbff 40%, #e9f6ff 100%);
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app {
   width: min(920px, 100%);
   margin: 0 auto;
-  padding: 16px;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -127,6 +129,7 @@ button {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:disabled {
@@ -299,7 +302,7 @@ button:disabled {
   overflow: hidden;
   box-shadow: var(--shadow);
   border: 3px solid #fff;
-  touch-action: manipulation;
+  touch-action: none;
   background-size: cover;
   background-position: center;
 }

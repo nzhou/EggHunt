@@ -17,6 +17,12 @@ const state = {
 };
 
 const BGM_PATH = "assets/audio/bgm_main.mp3";
+const SETTINGS_KEYS = {
+  sound: "egghunt_sound_enabled",
+  music: "egghunt_music_enabled",
+  runtime: "egghunt_runtime_state_v1",
+  metrics: "egghunt_metrics_v1",
+};
 
 const THEME_BACKGROUND_MAP = {
   garden: "assets/themes/garden.png",
@@ -106,6 +112,8 @@ const winSummary = document.getElementById("winSummary");
 const completePanel = document.getElementById("completePanel");
 let audioCtx = null;
 let bgmAudio = null;
+let bgmPausedByLifecycle = false;
+let persistTimer = null;
 
 function showScreen(name) {
   setupScreen.classList.toggle("active", name === "setup");
@@ -153,6 +161,115 @@ function syncBackgroundMusic() {
   }
 }
 
+function trackEvent(name) {
+  const raw = localStorage.getItem(SETTINGS_KEYS.metrics);
+  const metrics = raw ? JSON.parse(raw) : {};
+  metrics[name] = (metrics[name] || 0) + 1;
+  metrics.lastUpdatedAt = Date.now();
+  localStorage.setItem(SETTINGS_KEYS.metrics, JSON.stringify(metrics));
+}
+
+function persistRuntimeState() {
+  const snapshot = {
+    mode: state.mode,
+    theme: state.theme,
+    totalEggs: state.totalEggs,
+    eggs: state.eggs,
+    sceneObjects: state.sceneObjects,
+    nextObjectId: state.nextObjectId,
+    pendingEggs: state.pendingEggs,
+    hideTool: state.hideTool,
+    selectedPropKind: state.selectedPropKind,
+    foundCount: state.foundCount,
+    wandUses: state.wandUses,
+    soundEnabled: state.soundEnabled,
+    musicEnabled: state.musicEnabled,
+    timestamp: Date.now(),
+  };
+  localStorage.setItem(SETTINGS_KEYS.runtime, JSON.stringify(snapshot));
+}
+
+function schedulePersistRuntimeState() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+  }
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persistRuntimeState();
+  }, 350);
+}
+
+function applySnapshot(snapshot) {
+  state.mode = snapshot.mode || "setup";
+  state.theme = THEME_BACKGROUND_MAP[snapshot.theme] ? snapshot.theme : "garden";
+  state.totalEggs = Number(snapshot.totalEggs) || 6;
+  state.eggs = Array.isArray(snapshot.eggs) ? snapshot.eggs : [];
+  state.sceneObjects = Array.isArray(snapshot.sceneObjects) ? snapshot.sceneObjects : [];
+  state.nextObjectId = Number(snapshot.nextObjectId) || 1;
+  state.pendingEggs = Array.isArray(snapshot.pendingEggs) ? snapshot.pendingEggs : [];
+  state.hideTool = snapshot.hideTool === "props" ? "props" : "eggs";
+  state.selectedPropKind = COMMON_PROP_KINDS.includes(snapshot.selectedPropKind)
+    ? snapshot.selectedPropKind
+    : COMMON_PROP_KINDS[0];
+  state.selectedItem = null;
+  state.dragging = null;
+  state.foundCount = Number(snapshot.foundCount) || 0;
+  state.wandUses = Number(snapshot.wandUses);
+  if (!Number.isFinite(state.wandUses)) {
+    state.wandUses = 3;
+  }
+  state.soundEnabled = snapshot.soundEnabled !== false;
+  state.musicEnabled = snapshot.musicEnabled !== false;
+
+  state.eggs.forEach((egg) => normalizeEgg(egg));
+  state.sceneObjects.forEach((prop) => normalizeProp(prop));
+
+  eggCountInput.value = String(state.totalEggs);
+  eggCountValue.textContent = String(state.totalEggs);
+}
+
+function restoreRuntimeState() {
+  const raw = localStorage.getItem(SETTINGS_KEYS.runtime);
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const snapshot = JSON.parse(raw);
+    if (!snapshot || typeof snapshot !== "object") {
+      return false;
+    }
+    applySnapshot(snapshot);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function handleLifecycleStateChange(isVisible) {
+  if (!isVisible) {
+    if (bgmAudio && !bgmAudio.paused) {
+      bgmPausedByLifecycle = true;
+      bgmAudio.pause();
+    } else {
+      bgmPausedByLifecycle = false;
+    }
+    if (audioCtx && audioCtx.state === "running") {
+      audioCtx.suspend();
+    }
+    persistRuntimeState();
+    return;
+  }
+
+  if (state.musicEnabled && bgmPausedByLifecycle) {
+    syncBackgroundMusic();
+    bgmPausedByLifecycle = false;
+  }
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+}
+
 function resetRound() {
   state.mode = "setup";
   state.totalEggs = Number(eggCountInput.value);
@@ -171,6 +288,7 @@ function resetRound() {
   renderScene();
   renderStatus();
   showScreen("setup");
+  schedulePersistRuntimeState();
 }
 
 function startHideMode() {
@@ -190,12 +308,15 @@ function startHideMode() {
   renderPropPicker();
   renderScene();
   renderStatus();
+  trackEvent("huntsStarted");
+  schedulePersistRuntimeState();
 }
 
 function startFindMode() {
   state.mode = "find";
   renderScene();
   renderStatus();
+  schedulePersistRuntimeState();
 }
 
 function replayCurrentHunt() {
@@ -211,6 +332,8 @@ function replayCurrentHunt() {
   showScreen("game");
   renderScene();
   renderStatus();
+  trackEvent("replays");
+  schedulePersistRuntimeState();
 }
 
 function renderStatus() {
@@ -552,6 +675,7 @@ function renderThemePicker() {
       state.theme = theme;
       renderThemePicker();
       renderScene();
+      schedulePersistRuntimeState();
     });
 
     themePicker.appendChild(btn);
@@ -583,6 +707,7 @@ function placeEggFromShelf(eggIndex, point) {
   setSelection("egg", state.eggs.length - 1);
   renderScene();
   renderStatus();
+  schedulePersistRuntimeState();
 }
 
 function returnEggToShelf(eggIndex) {
@@ -598,6 +723,7 @@ function returnEggToShelf(eggIndex) {
     rotate: 0,
     hitRadius: 4.9,
   });
+  schedulePersistRuntimeState();
 }
 
 function placePropFromShelf(kind, point) {
@@ -619,6 +745,7 @@ function placePropFromShelf(kind, point) {
   setSelection("prop", state.sceneObjects.length - 1);
   renderScene();
   renderStatus();
+  schedulePersistRuntimeState();
 }
 
 function handleHideTap(event) {
@@ -640,6 +767,7 @@ function handleHideTap(event) {
       state.dragging = null;
       renderScene();
       renderStatus();
+      schedulePersistRuntimeState();
       return;
     }
     if (handleType === "flip") {
@@ -651,6 +779,7 @@ function handleHideTap(event) {
       }
       renderScene();
       renderStatus();
+      schedulePersistRuntimeState();
       return;
     }
     const center = objectCenterClientPx(obj);
@@ -745,6 +874,7 @@ function endHideDrag(event) {
     return;
   }
   state.dragging = null;
+  schedulePersistRuntimeState();
 }
 
 function handleFindTap(event) {
@@ -755,6 +885,7 @@ function handleFindTap(event) {
     .find((prop) => !prop.removing && distance(prop, point) < propHitRadius(prop));
   if (propMatch) {
     playPropTapSfx();
+    trackEvent("propHits");
     propMatch.removing = true;
     const propEl = scene.querySelector(`.scene-object[data-prop-id="${propMatch.id}"]`);
     if (propEl) {
@@ -780,6 +911,7 @@ function handleFindTap(event) {
       if (idx >= 0) {
         state.sceneObjects.splice(idx, 1);
         renderScene();
+        schedulePersistRuntimeState();
       }
     }, 420);
     return;
@@ -791,16 +923,19 @@ function handleFindTap(event) {
 
   if (!match) {
     playMissTapSfx();
+    trackEvent("missTaps");
     return;
   }
 
   playEggFoundSfx();
+  trackEvent("eggHits");
   match.found = true;
   match.foundAt = Date.now();
   state.foundCount += 1;
   renderScene();
   renderStatus();
   spawnFoundBurst(match);
+  schedulePersistRuntimeState();
 
   if (state.foundCount === state.totalEggs) {
     finishHunt();
@@ -842,6 +977,7 @@ function useHint() {
 
   state.wandUses -= 1;
   playWandSfx();
+  trackEvent("hintsUsed");
   renderStatus();
 
   const target = remaining[Math.floor(Math.random() * remaining.length)];
@@ -852,6 +988,7 @@ function useHint() {
   scene.appendChild(ring);
 
   setTimeout(() => ring.remove(), 1500);
+  schedulePersistRuntimeState();
 }
 
 function renderScene() {
@@ -996,23 +1133,29 @@ function finishHunt() {
   state.mode = "complete";
   showScreen("game");
   renderStatus();
+  trackEvent("huntsCompleted");
+  schedulePersistRuntimeState();
 }
 
 eggCountInput.addEventListener("input", () => {
   eggCountValue.textContent = eggCountInput.value;
+  state.totalEggs = Number(eggCountInput.value);
+  schedulePersistRuntimeState();
 });
 
 soundToggleBtn.addEventListener("click", () => {
   state.soundEnabled = !state.soundEnabled;
-  localStorage.setItem("egghunt_sound_enabled", state.soundEnabled ? "1" : "0");
+  localStorage.setItem(SETTINGS_KEYS.sound, state.soundEnabled ? "1" : "0");
   updateSoundButton();
+  schedulePersistRuntimeState();
 });
 
 musicToggleBtn.addEventListener("click", () => {
   state.musicEnabled = !state.musicEnabled;
-  localStorage.setItem("egghunt_music_enabled", state.musicEnabled ? "1" : "0");
+  localStorage.setItem(SETTINGS_KEYS.music, state.musicEnabled ? "1" : "0");
   updateMusicButton();
   syncBackgroundMusic();
+  schedulePersistRuntimeState();
 });
 
 startHideBtn.addEventListener("click", startHideMode);
@@ -1088,14 +1231,24 @@ scene.addEventListener("drop", (event) => {
 });
 scene.addEventListener("contextmenu", (event) => event.preventDefault());
 
-const savedSoundEnabled = localStorage.getItem("egghunt_sound_enabled");
-if (savedSoundEnabled === "0") {
-  state.soundEnabled = false;
-}
-const savedMusicEnabled = localStorage.getItem("egghunt_music_enabled");
-if (savedMusicEnabled === "0") {
-  state.musicEnabled = false;
-}
+window.addEventListener("visibilitychange", () => {
+  handleLifecycleStateChange(!document.hidden);
+});
+window.addEventListener("pagehide", () => {
+  handleLifecycleStateChange(false);
+});
+window.addEventListener("pageshow", () => {
+  handleLifecycleStateChange(true);
+});
+window.addEventListener("beforeunload", () => {
+  persistRuntimeState();
+});
+
+const savedSoundEnabled = localStorage.getItem(SETTINGS_KEYS.sound);
+const savedMusicEnabled = localStorage.getItem(SETTINGS_KEYS.music);
+if (savedSoundEnabled === "0") state.soundEnabled = false;
+if (savedMusicEnabled === "0") state.musicEnabled = false;
+trackEvent("sessions");
 updateMusicButton();
 updateSoundButton();
 syncBackgroundMusic();
@@ -1106,5 +1259,24 @@ document.addEventListener(
   },
   { once: true }
 );
-renderThemePicker();
-resetRound();
+
+if (restoreRuntimeState()) {
+  renderThemePicker();
+  renderPropPicker();
+  renderScene();
+  renderStatus();
+  showScreen(state.mode === "setup" ? "setup" : "game");
+} else {
+  renderThemePicker();
+  resetRound();
+}
+
+window.EggHuntMetrics = {
+  read() {
+    const raw = localStorage.getItem(SETTINGS_KEYS.metrics);
+    return raw ? JSON.parse(raw) : {};
+  },
+  clear() {
+    localStorage.removeItem(SETTINGS_KEYS.metrics);
+  },
+};
