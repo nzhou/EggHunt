@@ -1,6 +1,8 @@
 # EggHunt
 
-Web version of EggHunt.
+Fairytale-style Easter egg hunt game for kids.
+
+Current release target: **offline mobile V0** (no login/backend).
 
 ## Live Site
 
@@ -12,6 +14,24 @@ Web version of EggHunt.
 1. Open repository **Settings** -> **Pages**.
 2. Set **Source** to **GitHub Actions**.
 3. Push to `main` to trigger deployment.
+
+## Local Web Run
+
+Open `index.html` in browser, or host static files with any local server.
+
+## Mobile (Capacitor) Workflow
+
+```bash
+npm install
+npx cap add android
+npx cap add ios
+npm run cap:sync
+npm run cap:open:android
+```
+
+See:
+- `docs/mobile-v0-offline-release.md`
+- `docs/v1-login-share-roadmap.md`
 
 ## Notes on Repository Visibility
 
