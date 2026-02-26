@@ -1,0 +1,39 @@
+{
+  "name": "egghunt",
+  "version": "1.0.0",
+  "description": "EggHunt offline mobile-ready web app",
+  "private": true,
+  "main": "app.js",
+  "scripts": {
+    "prepare:web": "node scripts/prepare-web.mjs",
+    "cap:sync": "npm run prepare:web && npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "mobile:android": "npm run cap:sync && npm run cap:open:android",
+    "mobile:ios": "npm run cap:sync && npm run cap:open:ios"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nzhou/EggHunt.git"
+  },
+  "keywords": [
+    "kids",
+    "game",
+    "easter",
+    "capacitor"
+  ],
+  "author": "EggHunt",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nzhou/EggHunt/issues"
+  },
+  "homepage": "https://github.com/nzhou/EggHunt#readme",
+  "devDependencies": {
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^6.2.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/ios": "^6.2.1"
+  }
+}
