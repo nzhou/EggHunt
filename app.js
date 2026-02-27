@@ -153,6 +153,7 @@ const EGG_MAX_COUNT = 12;
 const HUNT_SCHEMA_VERSION = 1;
 const SHARE_PARAM_KEY = "hunt";
 const THEME_ORDER = ["garden", "forest", "playground", "indoor"];
+const SHARE_BASE_URL = "https://nzhou.github.io/EggHunt/";
 const FIREWORK_COLORS = ["#ff6b6b", "#ffd166", "#06d6a0", "#4cc9f0", "#f72585", "#f9844a"];
 const HELP_COPY = {
   hide: [
@@ -426,7 +427,7 @@ function parseCompactSharePayload(bytes) {
 function buildShareUrl() {
   const payloadBytes = buildCompactSharePayload();
   const encoded = base64UrlEncodeBytes(payloadBytes);
-  const url = new URL(window.location.href);
+  const url = new URL(SHARE_BASE_URL);
   url.searchParams.set(SHARE_PARAM_KEY, encoded);
   return url.toString();
 }
