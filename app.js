@@ -109,6 +109,16 @@ const winSummary = document.getElementById("winSummary");
 const completePanel = document.getElementById("completePanel");
 let audioCtx = null;
 let bgmAudio = null;
+let celebrationCanvas = null;
+let celebrationCtx = null;
+let celebrationRaf = null;
+let celebrationParticles = [];
+let celebrationStartedAt = 0;
+let celebrationLastFrameAt = 0;
+let celebrationBurstCount = 0;
+let celebrationNextBurstAt = 0;
+let celebrationResizeHandler = null;
+const FIREWORK_COLORS = ["#ff6b6b", "#ffd166", "#06d6a0", "#4cc9f0", "#f72585", "#f9844a"];
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -117,6 +127,143 @@ function clamp(value, min, max) {
 function setEggCount(value) {
   state.totalEggs = clamp(Number(value) || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT);
   eggCountValue.textContent = String(state.totalEggs);
+}
+
+function stopCelebrationFireworks() {
+  if (celebrationRaf) {
+    cancelAnimationFrame(celebrationRaf);
+    celebrationRaf = null;
+  }
+  if (celebrationResizeHandler) {
+    window.removeEventListener("resize", celebrationResizeHandler);
+    celebrationResizeHandler = null;
+  }
+  celebrationParticles = [];
+  celebrationCtx = null;
+  if (celebrationCanvas) {
+    celebrationCanvas.remove();
+    celebrationCanvas = null;
+  }
+}
+
+function shouldReduceMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function resizeCelebrationCanvas() {
+  if (!celebrationCanvas || !celebrationCtx) {
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  celebrationCanvas.width = Math.floor(width * dpr);
+  celebrationCanvas.height = Math.floor(height * dpr);
+  celebrationCanvas.style.width = `${width}px`;
+  celebrationCanvas.style.height = `${height}px`;
+  celebrationCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function spawnFireworkBurst() {
+  if (!celebrationCanvas) {
+    return;
+  }
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const x = width * (0.15 + Math.random() * 0.7);
+  const y = height * (0.12 + Math.random() * 0.38);
+  const pieces = 42 + Math.floor(Math.random() * 20);
+
+  for (let i = 0; i < pieces; i += 1) {
+    const angle = (Math.PI * 2 * i) / pieces + (Math.random() - 0.5) * 0.22;
+    const speed = 110 + Math.random() * 260;
+    celebrationParticles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 30,
+      life: 0,
+      ttl: 0.9 + Math.random() * 0.75,
+      size: 1.8 + Math.random() * 2.8,
+      color: FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)],
+    });
+  }
+}
+
+function drawCelebrationFrame(now) {
+  if (!celebrationCtx || !celebrationCanvas) {
+    return;
+  }
+  const dt = Math.min(0.033, (now - celebrationLastFrameAt) / 1000 || 0.016);
+  celebrationLastFrameAt = now;
+
+  if (now >= celebrationNextBurstAt && celebrationBurstCount < 8) {
+    spawnFireworkBurst();
+    celebrationBurstCount += 1;
+    celebrationNextBurstAt = now + 200 + Math.random() * 180;
+  }
+
+  const gravity = 460;
+  celebrationParticles = celebrationParticles.filter((p) => {
+    p.life += dt;
+    if (p.life >= p.ttl) {
+      return false;
+    }
+    p.vy += gravity * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    return true;
+  });
+
+  celebrationCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  for (const p of celebrationParticles) {
+    const alpha = 1 - p.life / p.ttl;
+    celebrationCtx.globalAlpha = alpha;
+    celebrationCtx.fillStyle = p.color;
+    celebrationCtx.beginPath();
+    celebrationCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    celebrationCtx.fill();
+  }
+  celebrationCtx.globalAlpha = 1;
+
+  const elapsed = now - celebrationStartedAt;
+  if (elapsed < 2300 || celebrationParticles.length > 0) {
+    celebrationRaf = requestAnimationFrame(drawCelebrationFrame);
+    return;
+  }
+  stopCelebrationFireworks();
+}
+
+function startCelebrationFireworks() {
+  stopCelebrationFireworks();
+  if (shouldReduceMotion()) {
+    return;
+  }
+
+  celebrationCanvas = document.createElement("canvas");
+  celebrationCanvas.setAttribute("aria-hidden", "true");
+  celebrationCanvas.style.position = "fixed";
+  celebrationCanvas.style.inset = "0";
+  celebrationCanvas.style.pointerEvents = "none";
+  celebrationCanvas.style.zIndex = "999";
+  document.body.appendChild(celebrationCanvas);
+
+  celebrationCtx = celebrationCanvas.getContext("2d");
+  if (!celebrationCtx) {
+    stopCelebrationFireworks();
+    return;
+  }
+
+  celebrationResizeHandler = () => resizeCelebrationCanvas();
+  window.addEventListener("resize", celebrationResizeHandler);
+  resizeCelebrationCanvas();
+
+  celebrationParticles = [];
+  celebrationBurstCount = 0;
+  celebrationStartedAt = performance.now();
+  celebrationLastFrameAt = celebrationStartedAt;
+  celebrationNextBurstAt = celebrationStartedAt;
+  celebrationRaf = requestAnimationFrame(drawCelebrationFrame);
 }
 
 function showScreen(name) {
@@ -167,6 +314,7 @@ function syncBackgroundMusic() {
 }
 
 function resetRound() {
+  stopCelebrationFireworks();
   state.mode = "setup";
   setEggCount(state.totalEggs);
   state.eggs = [];
@@ -187,6 +335,7 @@ function resetRound() {
 }
 
 function startHideMode() {
+  stopCelebrationFireworks();
   state.mode = "hide";
   setEggCount(state.totalEggs);
   state.eggs = [];
@@ -212,6 +361,7 @@ function startFindMode() {
 }
 
 function replayCurrentHunt(options = {}) {
+  stopCelebrationFireworks();
   const { resetWands = true } = options;
   state.mode = "find";
   state.foundCount = 0;
@@ -396,6 +546,14 @@ function playWandSfx() {
   playTone({ freq: 520, type: "triangle", duration: 0.1, volume: 0.08 });
   playTone({ freq: 780, type: "sine", duration: 0.13, volume: 0.1, when: 0.05 });
   playTone({ freq: 1120, type: "triangle", duration: 0.16, volume: 0.09, when: 0.11 });
+}
+
+function playCelebrationSfx() {
+  playTone({ freq: 660, type: "triangle", duration: 0.12, volume: 0.08, when: 0 });
+  playTone({ freq: 880, type: "triangle", duration: 0.12, volume: 0.08, when: 0.09 });
+  playTone({ freq: 1108, type: "triangle", duration: 0.14, volume: 0.085, when: 0.18 });
+  playTone({ freq: 1320, type: "sine", duration: 0.16, volume: 0.075, when: 0.31 });
+  playTone({ freq: 1760, type: "sine", duration: 0.22, volume: 0.065, when: 0.45, sweepTo: 2093 });
 }
 
 function clamp(value, min, max) {
@@ -1012,6 +1170,8 @@ function finishHunt() {
   state.mode = "complete";
   showScreen("game");
   renderStatus();
+  playCelebrationSfx();
+  startCelebrationFireworks();
 }
 
 eggMinusBtn.addEventListener("click", () => {
