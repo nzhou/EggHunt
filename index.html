@@ -74,10 +74,25 @@
 
         <div class="actions">
           <button id="nextBtn" class="primary" disabled>Pass to Finder</button>
+          <button id="shareBtn" class="secondary" type="button" hidden>Share with Friend</button>
           <button id="hintBtn" class="secondary" hidden>Use Magic Wand</button>
         </div>
       </section>
     </main>
+
+    <div id="shareModal" class="share-modal" hidden>
+      <div id="shareModalBackdrop" class="share-modal-backdrop"></div>
+      <div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle">
+        <h2 id="shareModalTitle">Share with Friend</h2>
+        <p class="share-help">Share this message with your friend using any mail or chat app, and invite them to find the eggs you hide!</p>
+        <textarea id="shareDraftBody" class="share-draft" readonly></textarea>
+        <p id="shareStatusText" class="share-status" aria-live="polite"></p>
+        <div class="actions">
+          <button id="shareCopyDraftBtn" class="primary" type="button">Copy Message</button>
+          <button id="shareCloseBtn" class="ghost" type="button">Close</button>
+        </div>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>

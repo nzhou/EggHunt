@@ -290,6 +290,26 @@ button:disabled {
   position: relative;
 }
 
+.shelf-prop-count {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #1f334d;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.shelf-prop.prop-slot-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .shelf-prop.image-prop {
   background-position: center;
   background-repeat: no-repeat;
@@ -666,6 +686,65 @@ button:disabled {
 
 .actions button {
   flex: 1;
+}
+
+.share-modal[hidden] {
+  display: none !important;
+}
+
+.share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+}
+
+.share-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 33, 49, 0.38);
+}
+
+.share-modal-card {
+  position: relative;
+  width: min(560px, calc(100% - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.share-input,
+.share-draft {
+  width: 100%;
+  border: 2px solid #dfe8f2;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  background: #fbfdff;
+}
+
+.share-draft {
+  min-height: 144px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.share-help {
+  font-size: 14px;
+  color: #355271;
+}
+
+.share-status {
+  min-height: 1.2em;
+  font-size: 13px;
+  color: #2b4b70;
 }
 
 @media (max-width: 680px) {

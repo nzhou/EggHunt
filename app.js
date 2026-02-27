@@ -41,6 +41,9 @@ const EGG_ASSET_PATHS = [
 ];
 const EGG_MIN_COUNT = 3;
 const EGG_MAX_COUNT = 12;
+const HUNT_SCHEMA_VERSION = 1;
+const SHARE_PARAM_KEY = "hunt";
+const THEME_ORDER = ["garden", "forest", "playground", "indoor"];
 
 const PROP_ASSET_MAP = {
   basket: "assets/props/prop_basket.png?v=4",
@@ -65,6 +68,7 @@ const COMMON_PROP_KINDS = [
   "storybook",
   "toy",
 ];
+const MAX_PROPS_PER_KIND = 3;
 
 const PROP_ICON_MAP = {
   bunny: "🐇",
@@ -99,6 +103,7 @@ const propShelfWrap = document.getElementById("propShelfWrap");
 const propShelfLabel = document.getElementById("propShelfLabel");
 const propPicker = document.getElementById("propPicker");
 const nextBtn = document.getElementById("nextBtn");
+const shareBtn = document.getElementById("shareBtn");
 const hintBtn = document.getElementById("hintBtn");
 const restartBtn = document.getElementById("restartBtn");
 const musicToggleBtn = document.getElementById("musicToggleBtn");
@@ -107,6 +112,12 @@ const playAgainBtn = document.getElementById("playAgainBtn");
 const newHuntBtn = document.getElementById("newHuntBtn");
 const winSummary = document.getElementById("winSummary");
 const completePanel = document.getElementById("completePanel");
+const shareModal = document.getElementById("shareModal");
+const shareModalBackdrop = document.getElementById("shareModalBackdrop");
+const shareDraftBody = document.getElementById("shareDraftBody");
+const shareStatusText = document.getElementById("shareStatusText");
+const shareCopyDraftBtn = document.getElementById("shareCopyDraftBtn");
+const shareCloseBtn = document.getElementById("shareCloseBtn");
 let audioCtx = null;
 let bgmAudio = null;
 let celebrationCanvas = null;
@@ -128,6 +139,290 @@ function clamp(value, min, max) {
 function setEggCount(value) {
   state.totalEggs = clamp(Number(value) || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT);
   eggCountValue.textContent = String(state.totalEggs);
+}
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecodeToBytes(encoded) {
+  const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4 ? "=".repeat(4 - (normalized.length % 4)) : "";
+  const binary = atob(normalized + pad);
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+function quantize(value, min, max, bits) {
+  const steps = (1 << bits) - 1;
+  const clamped = clamp(Number(value) || 0, min, max);
+  return Math.round(((clamped - min) / (max - min)) * steps);
+}
+
+function dequantize(value, min, max, bits) {
+  const steps = (1 << bits) - 1;
+  const ratio = clamp(value, 0, steps) / steps;
+  return min + ratio * (max - min);
+}
+
+class BitWriter {
+  constructor() {
+    this.bytes = [];
+    this.current = 0;
+    this.bitPos = 0;
+  }
+
+  write(value, bits) {
+    for (let i = bits - 1; i >= 0; i -= 1) {
+      const bit = (value >> i) & 1;
+      this.current = (this.current << 1) | bit;
+      this.bitPos += 1;
+      if (this.bitPos === 8) {
+        this.bytes.push(this.current);
+        this.current = 0;
+        this.bitPos = 0;
+      }
+    }
+  }
+
+  toUint8Array() {
+    if (this.bitPos > 0) {
+      this.current <<= 8 - this.bitPos;
+      this.bytes.push(this.current);
+      this.current = 0;
+      this.bitPos = 0;
+    }
+    return Uint8Array.from(this.bytes);
+  }
+}
+
+class BitReader {
+  constructor(bytes) {
+    this.bytes = bytes;
+    this.bytePos = 0;
+    this.bitPos = 0;
+  }
+
+  read(bits) {
+    let value = 0;
+    for (let i = 0; i < bits; i += 1) {
+      if (this.bytePos >= this.bytes.length) {
+        throw new Error("Unexpected end of payload");
+      }
+      const currentByte = this.bytes[this.bytePos];
+      const bit = (currentByte >> (7 - this.bitPos)) & 1;
+      value = (value << 1) | bit;
+      this.bitPos += 1;
+      if (this.bitPos === 8) {
+        this.bitPos = 0;
+        this.bytePos += 1;
+      }
+    }
+    return value;
+  }
+}
+
+function buildCompactSharePayload() {
+  const writer = new BitWriter();
+  const themeIndex = Math.max(0, THEME_ORDER.indexOf(state.theme));
+  const eggCount = clamp(state.eggs.length, 0, 15);
+  const propCount = clamp(state.sceneObjects.length, 0, 63);
+
+  writer.write(HUNT_SCHEMA_VERSION, 3);
+  writer.write(themeIndex, 2);
+  writer.write(clamp(state.totalEggs, 0, 15), 4);
+  writer.write(eggCount, 4);
+  writer.write(propCount, 6);
+
+  state.eggs.slice(0, eggCount).forEach((egg) => {
+    writer.write(quantize(egg.x, 0, 100, 7), 7);
+    writer.write(quantize(egg.y, 0, 100, 7), 7);
+    writer.write(quantize(egg.scale ?? 1, 0.55, 1.9, 5), 5);
+    writer.write(quantize(egg.rotate ?? 0, -180, 180, 8), 8);
+    writer.write(egg.flipX === -1 ? 1 : 0, 1);
+    writer.write(clamp(EGG_ASSET_PATHS.indexOf(egg.asset), 0, 7), 3);
+  });
+
+  state.sceneObjects.slice(0, propCount).forEach((prop) => {
+    writer.write(clamp(COMMON_PROP_KINDS.indexOf(prop.kind), 0, 15), 4);
+    writer.write(quantize(prop.x, 0, 100, 7), 7);
+    writer.write(quantize(prop.y, 0, 100, 7), 7);
+    writer.write(quantize(prop.scale ?? 1, 0.55, 1.9, 5), 5);
+    writer.write(quantize(prop.rotate ?? 0, -180, 180, 8), 8);
+    writer.write(prop.flipX === -1 ? 1 : 0, 1);
+  });
+
+  return writer.toUint8Array();
+}
+
+function parseCompactSharePayload(bytes) {
+  const reader = new BitReader(bytes);
+  const version = reader.read(3);
+  if (version !== HUNT_SCHEMA_VERSION) {
+    throw new Error("Unsupported shared hunt version");
+  }
+
+  const themeIndex = reader.read(2);
+  const totalEggs = reader.read(4);
+  const eggCount = reader.read(4);
+  const propCount = reader.read(6);
+
+  const eggs = [];
+  for (let i = 0; i < eggCount; i += 1) {
+    const x = dequantize(reader.read(7), 0, 100, 7);
+    const y = dequantize(reader.read(7), 0, 100, 7);
+    const scale = dequantize(reader.read(5), 0.55, 1.9, 5);
+    const rotate = dequantize(reader.read(8), -180, 180, 8);
+    const flipBit = reader.read(1);
+    const assetIndex = reader.read(3);
+    eggs.push({
+      found: false,
+      foundAt: null,
+      pattern: randomPattern(),
+      asset: EGG_ASSET_PATHS[assetIndex] || randomEggAsset(),
+      x: clamp(x, 2, 98),
+      y: clamp(y, 2, 98),
+      scale: clamp(scale, 0.55, 1.9),
+      rotate: clamp(rotate, -180, 180),
+      flipX: flipBit ? -1 : 1,
+      hitRadius: 4.9,
+    });
+  }
+
+  const props = [];
+  for (let i = 0; i < propCount; i += 1) {
+    const kindIndex = reader.read(4);
+    const x = dequantize(reader.read(7), 0, 100, 7);
+    const y = dequantize(reader.read(7), 0, 100, 7);
+    const scale = dequantize(reader.read(5), 0.55, 1.9, 5);
+    const rotate = dequantize(reader.read(8), -180, 180, 8);
+    const flipBit = reader.read(1);
+    props.push({
+      id: i + 1,
+      kind: COMMON_PROP_KINDS[kindIndex] || COMMON_PROP_KINDS[0],
+      x: clamp(x, 2, 98),
+      y: clamp(y, 2, 98),
+      rotate: clamp(rotate, -180, 180),
+      scale: clamp(scale, 0.55, 1.9),
+      flipX: flipBit ? -1 : 1,
+      opacity: 1,
+    });
+  }
+
+  return {
+    theme: THEME_ORDER[themeIndex] || "garden",
+    totalEggs: clamp(totalEggs || eggs.length || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT),
+    eggs,
+    props,
+  };
+}
+
+function buildShareUrl() {
+  const payloadBytes = buildCompactSharePayload();
+  const encoded = base64UrlEncodeBytes(payloadBytes);
+  const url = new URL(window.location.href);
+  url.searchParams.set(SHARE_PARAM_KEY, encoded);
+  return url.toString();
+}
+
+function buildShareEmailDraft(shareUrl) {
+  return [
+    "Hi!",
+    "",
+    "I made an EggHunt challenge for you.",
+    "Open this link to start finding eggs:",
+    shareUrl,
+    "",
+    "Have fun!",
+  ].join("\n");
+}
+
+function setShareStatus(message) {
+  if (!shareStatusText) {
+    return;
+  }
+  shareStatusText.textContent = message;
+}
+
+function closeShareModal() {
+  if (!shareModal || shareModal.hidden) {
+    return;
+  }
+  shareModal.hidden = true;
+}
+
+function openShareModal() {
+  if (state.mode !== "hide" || state.eggs.length !== state.totalEggs) {
+    return;
+  }
+  const shareUrl = buildShareUrl();
+  shareDraftBody.value = buildShareEmailDraft(shareUrl);
+  setShareStatus("");
+  shareModal.hidden = false;
+  shareDraftBody.focus();
+  shareDraftBody.select();
+}
+
+async function copyShareDraft() {
+  const draft = shareDraftBody.value || buildShareEmailDraft(buildShareUrl());
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(draft);
+      setShareStatus("Messaged copied.");
+      return;
+    }
+  } catch {
+    // Fallback below.
+  }
+
+  shareDraftBody.focus();
+  shareDraftBody.select();
+  const copied = document.execCommand("copy");
+  setShareStatus(copied ? "Messaged copied." : "Copy failed. Please copy manually.");
+}
+
+function loadSharedHuntFromUrl() {
+  const url = new URL(window.location.href);
+  const raw = url.searchParams.get(SHARE_PARAM_KEY);
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const bytes = base64UrlDecodeToBytes(raw);
+    const payload = parseCompactSharePayload(bytes);
+
+    state.theme = THEME_BACKGROUND_MAP[payload.theme] ? payload.theme : "garden";
+    setEggCount(payload.totalEggs);
+
+    state.eggs = payload.eggs;
+    state.eggs.forEach((egg) => normalizeEgg(egg));
+
+    state.sceneObjects = payload.props;
+    state.sceneObjects.forEach((prop) => normalizeProp(prop));
+
+    state.nextObjectId = state.sceneObjects.length + 1;
+    state.pendingEggs = [];
+    state.hideTool = "eggs";
+    state.selectedPropKind = COMMON_PROP_KINDS[0];
+    state.selectedItem = null;
+    state.dragging = null;
+    state.foundCount = 0;
+    state.wandUses = 3;
+    state.mode = "find";
+
+    renderThemePicker();
+    renderPropPicker();
+    renderScene();
+    showScreen("game");
+    renderStatus();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function stopCelebrationFireworks() {
@@ -271,6 +566,9 @@ function showScreen(name) {
   setupScreen.classList.toggle("active", name === "setup");
   gameScreen.classList.toggle("active", name === "game");
   restartBtn.hidden = name === "setup";
+  if (name !== "game") {
+    closeShareModal();
+  }
 }
 
 function updateSoundButton() {
@@ -390,6 +688,8 @@ function renderStatus() {
     nextBtn.disabled = state.eggs.length !== state.totalEggs;
     nextBtn.textContent = "Pass to Finder";
     nextBtn.hidden = false;
+    shareBtn.hidden = false;
+    shareBtn.disabled = state.eggs.length !== state.totalEggs;
     hintBtn.hidden = true;
     hintText.hidden = true;
     completePanel.hidden = true;
@@ -408,6 +708,7 @@ function renderStatus() {
     nextBtn.disabled = false;
     nextBtn.textContent = "Restart the Hunt";
     nextBtn.hidden = false;
+    shareBtn.hidden = true;
     hintBtn.hidden = false;
     hintBtn.disabled = state.wandUses < 1;
     hintText.hidden = false;
@@ -423,6 +724,7 @@ function renderStatus() {
     modeText.textContent = "Great job! All eggs found.";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
     nextBtn.hidden = true;
+    shareBtn.hidden = true;
     hintBtn.hidden = true;
     hintText.hidden = true;
     completePanel.hidden = false;
@@ -648,6 +950,14 @@ function propHitRadius(prop) {
   return 6.3 * (prop.scale ?? 1);
 }
 
+function getPropCountByKind(kind) {
+  return state.sceneObjects.reduce((count, prop) => count + (prop.kind === kind ? 1 : 0), 0);
+}
+
+function getRemainingPropsByKind(kind) {
+  return Math.max(0, MAX_PROPS_PER_KIND - getPropCountByKind(kind));
+}
+
 function getSelectedObject() {
   if (!state.selectedItem) {
     return null;
@@ -727,15 +1037,23 @@ function renderPropPicker() {
   if (state.mode !== "hide" || state.hideTool !== "props") {
     return;
   }
-  propShelfLabel.textContent = "Prop Shelf (unlimited drag)";
+  propShelfLabel.textContent = `Prop Shelf (max ${MAX_PROPS_PER_KIND} each)`;
 
   COMMON_PROP_KINDS.forEach((kind) => {
+    const remaining = getRemainingPropsByKind(kind);
+    const depleted = remaining < 1;
     const propEl = document.createElement("button");
     propEl.type = "button";
     propEl.className = "shelf-prop";
-    propEl.draggable = true;
+    if (depleted) {
+      propEl.classList.add("prop-slot-empty");
+    }
+    propEl.draggable = !depleted;
+    propEl.disabled = depleted;
     propEl.dataset.kind = kind;
-    propEl.title = `Drag ${kind.replace("-", " ")} into scene`;
+    propEl.title = depleted
+      ? `${kind.replace("-", " ")} used up`
+      : `Drag ${kind.replace("-", " ")} into scene (${remaining} left)`;
     const propAsset = PROP_ASSET_MAP[kind];
     if (propAsset) {
       propEl.classList.add("image-prop");
@@ -746,10 +1064,16 @@ function renderPropPicker() {
       label.textContent = PROP_ICON_MAP[kind] || kind.replace("-", " ");
       propEl.appendChild(label);
     }
-    propEl.addEventListener("dragstart", (event) => {
-      event.dataTransfer.setData("text/plain", `prop:${kind}`);
-      event.dataTransfer.effectAllowed = "copy";
-    });
+    if (!depleted) {
+      propEl.addEventListener("dragstart", (event) => {
+        event.dataTransfer.setData("text/plain", `prop:${kind}`);
+        event.dataTransfer.effectAllowed = "copy";
+      });
+    }
+    const count = document.createElement("span");
+    count.className = "shelf-prop-count";
+    count.textContent = `${remaining}`;
+    propEl.appendChild(count);
     propPicker.appendChild(propEl);
   });
 }
@@ -860,6 +1184,9 @@ function returnEggToShelf(eggIndex) {
 
 function placePropFromShelf(kind, point) {
   if (!COMMON_PROP_KINDS.includes(kind)) {
+    return;
+  }
+  if (getPropCountByKind(kind) >= MAX_PROPS_PER_KIND) {
     return;
   }
   const prop = {
@@ -1297,6 +1624,12 @@ nextBtn.addEventListener("click", () => {
     replayCurrentHunt();
   }
 });
+shareBtn.addEventListener("click", openShareModal);
+shareCopyDraftBtn.addEventListener("click", () => {
+  copyShareDraft();
+});
+shareCloseBtn.addEventListener("click", closeShareModal);
+shareModalBackdrop.addEventListener("click", closeShareModal);
 hintBtn.addEventListener("click", useHint);
 restartBtn.addEventListener("click", resetRound);
 playAgainBtn.addEventListener("click", replayCurrentHunt);
@@ -1359,6 +1692,11 @@ scene.addEventListener("drop", (event) => {
   }
 });
 scene.addEventListener("contextmenu", (event) => event.preventDefault());
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeShareModal();
+  }
+});
 
 const savedSoundEnabled = localStorage.getItem("egghunt_sound_enabled");
 if (savedSoundEnabled === "0") {
@@ -1379,5 +1717,7 @@ document.addEventListener(
   },
   { once: true }
 );
-renderThemePicker();
-resetRound();
+if (!loadSharedHuntFromUrl()) {
+  renderThemePicker();
+  resetRound();
+}
