@@ -11,6 +11,8 @@ const state = {
   selectedItem: null,
   dragging: null,
   foundCount: 0,
+  findStartEggs: [],
+  findStartSceneObjects: [],
   wandUses: 3,
   soundEnabled: true,
   musicEnabled: true,
@@ -411,6 +413,7 @@ function loadSharedHuntFromUrl() {
     state.selectedItem = null;
     state.dragging = null;
     state.foundCount = 0;
+    snapshotFindStartState();
     state.wandUses = 3;
     state.mode = "find";
 
@@ -625,6 +628,8 @@ function resetRound() {
   state.selectedItem = null;
   state.dragging = null;
   state.foundCount = 0;
+  state.findStartEggs = [];
+  state.findStartSceneObjects = [];
   state.wandUses = 3;
   renderThemePicker();
   renderPropPicker();
@@ -646,6 +651,8 @@ function startHideMode() {
   state.selectedItem = null;
   state.dragging = null;
   state.foundCount = 0;
+  state.findStartEggs = [];
+  state.findStartSceneObjects = [];
   state.wandUses = 3;
   showScreen("game");
   renderPropPicker();
@@ -654,6 +661,7 @@ function startHideMode() {
 }
 
 function startFindMode() {
+  snapshotFindStartState();
   state.mode = "find";
   renderScene();
   renderStatus();
@@ -667,10 +675,22 @@ function replayCurrentHunt(options = {}) {
   if (resetWands) {
     state.wandUses = 3;
   }
-  state.eggs.forEach((egg) => {
-    egg.found = false;
-    egg.foundAt = null;
-  });
+  if (state.findStartEggs.length > 0) {
+    state.eggs = state.findStartEggs.map((egg) => cloneEggState(egg));
+    state.sceneObjects = state.findStartSceneObjects.map((prop) => clonePropState(prop));
+    state.eggs.forEach((egg) => normalizeEgg(egg));
+    state.sceneObjects.forEach((prop) => normalizeProp(prop));
+    const maxPropId = state.sceneObjects.reduce((maxId, prop) => Math.max(maxId, Number(prop.id) || 0), 0);
+    state.nextObjectId = Math.max(1, maxPropId + 1);
+  } else {
+    state.eggs.forEach((egg) => {
+      egg.found = false;
+      egg.foundAt = null;
+    });
+    state.sceneObjects.forEach((prop) => {
+      delete prop.removing;
+    });
+  }
   state.selectedItem = null;
   state.dragging = null;
   showScreen("game");
@@ -747,6 +767,38 @@ function distance(a, b) {
 
 function randomPattern() {
   return Math.floor(Math.random() * 5);
+}
+
+function cloneEggState(egg) {
+  return {
+    x: egg.x,
+    y: egg.y,
+    found: false,
+    foundAt: null,
+    pattern: egg.pattern,
+    asset: egg.asset,
+    scale: egg.scale,
+    rotate: egg.rotate,
+    flipX: egg.flipX,
+    hitRadius: egg.hitRadius,
+  };
+}
+
+function clonePropState(prop) {
+  return {
+    id: prop.id,
+    kind: prop.kind,
+    x: prop.x,
+    y: prop.y,
+    scale: prop.scale,
+    rotate: prop.rotate,
+    flipX: prop.flipX,
+  };
+}
+
+function snapshotFindStartState() {
+  state.findStartEggs = state.eggs.map((egg) => cloneEggState(egg));
+  state.findStartSceneObjects = state.sceneObjects.map((prop) => clonePropState(prop));
 }
 
 function randomFrom(list) {
