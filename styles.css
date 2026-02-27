@@ -128,6 +128,7 @@ p {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+  padding-bottom: 4px;
 }
 
 .theme-picker {
@@ -141,7 +142,7 @@ p {
 }
 
 .theme-option {
-  flex: 0 0 calc(30% - 7px);
+  flex: 0 0 calc(28% - 7px);
   scroll-snap-align: start;
   border: 2px solid #e7edf5;
   border-radius: 12px;
@@ -164,7 +165,7 @@ p {
 .theme-option-preview {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   border-radius: 10px;
   background-size: contain;
   background-repeat: no-repeat;
@@ -174,7 +175,7 @@ p {
 }
 
 .theme-option-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -186,7 +187,7 @@ label {
 
 .stepper-field {
   margin-top: 0;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .stepper-row {
@@ -195,10 +196,7 @@ label {
   justify-content: center;
   gap: 12px;
   min-height: 48px;
-  position: relative;
-  z-index: 2;
-  background: var(--card);
-  border-radius: 12px;
+  background: transparent;
 }
 
 .stepper-row label {
@@ -336,6 +334,11 @@ button:disabled {
   font-weight: 700;
 }
 
+#propShelfLabel {
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .egg-shelf {
   display: flex;
   gap: 8px;
@@ -353,6 +356,8 @@ button:disabled {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.55);
   cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .shelf-egg.image-egg {
@@ -372,6 +377,28 @@ button:disabled {
   place-items: center;
   cursor: grab;
   position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.shelf-prop-count {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #1f334d;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.shelf-prop:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .shelf-prop.image-prop {

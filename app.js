@@ -1445,17 +1445,24 @@ function attachShelfInteraction(button, config) {
       event,
       index: config.getIndex(),
     });
-    try {
-      button.setPointerCapture(event.pointerId);
-    } catch {
-      // Some devices/webviews do not support capture reliably.
-    }
   });
 }
 
 function handleGlobalShelfPointerMove(event) {
-  if (!shelfDragState || shelfDragState.pointerId !== event.pointerId || shelfDragState.stage !== "ghost") {
+  if (!shelfDragState || shelfDragState.stage !== "ghost") {
     return;
+  }
+  if (typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+  if (
+    Number.isInteger(shelfDragState.pointerId) &&
+    Number.isInteger(event.pointerId) &&
+    shelfDragState.pointerId !== event.pointerId &&
+    !shelfDragState.moved
+  ) {
+    // Some Android WebViews reassign pointer IDs during gesture updates.
+    shelfDragState.pointerId = event.pointerId;
   }
   shelfDragState.lastX = event.clientX;
   shelfDragState.lastY = event.clientY;
@@ -1468,23 +1475,24 @@ function handleGlobalShelfPointerMove(event) {
 }
 
 function handleGlobalShelfPointerUp(event) {
-  if (!shelfDragState || shelfDragState.pointerId !== event.pointerId) {
+  if (!shelfDragState) {
     return;
   }
   const current = shelfDragState;
   if (current.stage !== "ghost") {
     return;
   }
-  const eventX = Number.isFinite(event.clientX) ? event.clientX : current.lastX;
-  const eventY = Number.isFinite(event.clientY) ? event.clientY : current.lastY;
   const rect = scene.getBoundingClientRect();
-  const insideScene =
-    eventX >= rect.left &&
-    eventX <= rect.right &&
-    eventY >= rect.top &&
-    eventY <= rect.bottom;
+  const eventX = Number.isFinite(event.clientX) && event.clientX > 0 ? event.clientX : current.lastX;
+  const eventY = Number.isFinite(event.clientY) && event.clientY > 0 ? event.clientY : current.lastY;
+  const pointInScene = (x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  const eventInsideScene = pointInScene(eventX, eventY);
+  const lastInsideScene = pointInScene(current.lastX, current.lastY);
+  const insideScene = eventInsideScene || lastInsideScene;
+  const dropX = eventInsideScene ? eventX : current.lastX;
+  const dropY = eventInsideScene ? eventY : current.lastY;
   if (insideScene) {
-    const point = sceneCoordsFromClient(eventX, eventY);
+    const point = sceneCoordsFromClient(dropX, dropY);
     if (current.sourceType === "egg") {
       placeEggFromShelf(current.index, point);
     } else {
@@ -1504,6 +1512,36 @@ function handleGlobalShelfPointerUp(event) {
     showToast("Drop inside the scene to place.");
   }
   clearShelfDragState();
+}
+
+function handleGlobalShelfTouchMove(event) {
+  if (!shelfDragState || shelfDragState.stage !== "ghost") {
+    return;
+  }
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+  handleGlobalShelfPointerMove({
+    pointerId: shelfDragState.pointerId,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    preventDefault: () => event.preventDefault(),
+  });
+}
+
+function handleGlobalShelfTouchEnd(event) {
+  if (!shelfDragState || shelfDragState.stage !== "ghost") {
+    return;
+  }
+  const touch = event.changedTouches && event.changedTouches[0];
+  const clientX = touch ? touch.clientX : shelfDragState.lastX;
+  const clientY = touch ? touch.clientY : shelfDragState.lastY;
+  handleGlobalShelfPointerUp({
+    pointerId: shelfDragState.pointerId,
+    clientX,
+    clientY,
+  });
 }
 
 function renderPropPicker() {
@@ -2240,6 +2278,9 @@ scene.addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("pointermove", handleGlobalShelfPointerMove);
 window.addEventListener("pointerup", handleGlobalShelfPointerUp);
 window.addEventListener("pointercancel", handleGlobalShelfPointerUp);
+window.addEventListener("touchmove", handleGlobalShelfTouchMove, { passive: false });
+window.addEventListener("touchend", handleGlobalShelfTouchEnd, { passive: false });
+window.addEventListener("touchcancel", handleGlobalShelfTouchEnd, { passive: false });
 
 window.addEventListener("visibilitychange", () => {
   handleLifecycleStateChange(!document.hidden);
