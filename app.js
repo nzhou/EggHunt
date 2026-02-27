@@ -1,5 +1,6 @@
 const state = {
   mode: "setup",
+  screen: "setup",
   theme: "garden",
   totalEggs: 6,
   eggs: [],
@@ -14,6 +15,7 @@ const state = {
   wandUses: 3,
   soundEnabled: true,
   musicEnabled: true,
+  helpOpen: false,
 };
 
 const BGM_PATH = "assets/audio/bgm_main.mp3";
@@ -85,7 +87,8 @@ const PROP_ICON_MAP = {
 const setupScreen = document.getElementById("setupScreen");
 const gameScreen = document.getElementById("gameScreen");
 const themePicker = document.getElementById("themePicker");
-const eggCountInput = document.getElementById("eggCount");
+const eggMinusBtn = document.getElementById("eggMinusBtn");
+const eggPlusBtn = document.getElementById("eggPlusBtn");
 const eggCountValue = document.getElementById("eggCountValue");
 const startHideBtn = document.getElementById("startHideBtn");
 const scene = document.getElementById("scene");
@@ -104,36 +107,87 @@ const propPicker = document.getElementById("propPicker");
 const nextBtn = document.getElementById("nextBtn");
 const hintBtn = document.getElementById("hintBtn");
 const restartBtn = document.getElementById("restartBtn");
+const helpBtn = document.getElementById("helpBtn");
+const setupMusicToggleBtn = document.getElementById("setupMusicToggleBtn");
+const setupSoundToggleBtn = document.getElementById("setupSoundToggleBtn");
 const musicToggleBtn = document.getElementById("musicToggleBtn");
 const soundToggleBtn = document.getElementById("soundToggleBtn");
 const playAgainBtn = document.getElementById("playAgainBtn");
 const newHuntBtn = document.getElementById("newHuntBtn");
 const winSummary = document.getElementById("winSummary");
 const completePanel = document.getElementById("completePanel");
+const helpModal = document.getElementById("helpModal");
+const helpTitle = document.getElementById("helpTitle");
+const helpBody = document.getElementById("helpBody");
+const helpCloseBtn = document.getElementById("helpCloseBtn");
+const toast = document.getElementById("toast");
+const dragGhost = document.getElementById("dragGhost");
+const rotateOverlay = document.getElementById("rotateOverlay");
 let audioCtx = null;
 let bgmAudio = null;
 let bgmPausedByLifecycle = false;
 let persistTimer = null;
+let toastTimer = null;
+let helpLastFocus = null;
+let shelfDragState = null;
+let mobileShelfFallbackEnabled = false;
+let orientationLockActive = false;
+const EGG_MIN_COUNT = 3;
+const EGG_MAX_COUNT = 12;
+const HELP_COPY = {
+  hide: [
+    "Press and hold an egg or prop in the shelf.",
+    "Drag into the scene and release to place it.",
+    "Tap placed items to move, rotate, scale, flip, or delete.",
+    "Place all eggs, then tap Pass to Finder.",
+  ],
+  find: [
+    "Tap eggs to find them all.",
+    "Props are distractions and can be tapped away.",
+    "Use Magic Wand to reveal one hidden egg.",
+    "Find every egg to finish the hunt.",
+  ],
+  complete: ["Great job! Start a new hunt or replay this scene."],
+};
 
 function showScreen(name) {
+  state.screen = name;
   setupScreen.classList.toggle("active", name === "setup");
   gameScreen.classList.toggle("active", name === "game");
+  void setOrientationForScreen(name);
+  updateRotateOverlay();
+  setTimeout(updateRotateOverlay, 120);
+  setTimeout(updateRotateOverlay, 420);
 }
 
 function updateSoundButton() {
-  if (!soundToggleBtn) {
-    return;
+  if (soundToggleBtn) {
+    soundToggleBtn.textContent = state.soundEnabled ? "🔊" : "🔇";
+    soundToggleBtn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+    soundToggleBtn.setAttribute("aria-label", state.soundEnabled ? "Sound on" : "Sound off");
+    soundToggleBtn.title = state.soundEnabled ? "Sound on" : "Sound off";
   }
-  soundToggleBtn.textContent = state.soundEnabled ? "🔊 Sound On" : "🔇 Sound Off";
-  soundToggleBtn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+  if (setupSoundToggleBtn) {
+    setupSoundToggleBtn.textContent = state.soundEnabled ? "🔊" : "🔇";
+    setupSoundToggleBtn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+    setupSoundToggleBtn.setAttribute("aria-label", state.soundEnabled ? "Sound on" : "Sound off");
+    setupSoundToggleBtn.title = state.soundEnabled ? "Sound on" : "Sound off";
+  }
 }
 
 function updateMusicButton() {
-  if (!musicToggleBtn) {
-    return;
+  if (musicToggleBtn) {
+    musicToggleBtn.textContent = state.musicEnabled ? "🎵" : "🔇";
+    musicToggleBtn.setAttribute("aria-pressed", state.musicEnabled ? "true" : "false");
+    musicToggleBtn.setAttribute("aria-label", state.musicEnabled ? "Music on" : "Music off");
+    musicToggleBtn.title = state.musicEnabled ? "Music on" : "Music off";
   }
-  musicToggleBtn.textContent = state.musicEnabled ? "🎵 Music On" : "🎵 Music Off";
-  musicToggleBtn.setAttribute("aria-pressed", state.musicEnabled ? "true" : "false");
+  if (setupMusicToggleBtn) {
+    setupMusicToggleBtn.textContent = state.musicEnabled ? "🎵" : "🔇";
+    setupMusicToggleBtn.setAttribute("aria-pressed", state.musicEnabled ? "true" : "false");
+    setupMusicToggleBtn.setAttribute("aria-label", state.musicEnabled ? "Music on" : "Music off");
+    setupMusicToggleBtn.title = state.musicEnabled ? "Music on" : "Music off";
+  }
 }
 
 function ensureBgmAudio() {
@@ -159,6 +213,106 @@ function syncBackgroundMusic() {
       // autoplay can be blocked before a user interaction
     });
   }
+}
+
+function setEggCount(value) {
+  state.totalEggs = clamp(Number(value) || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT);
+  eggCountValue.textContent = String(state.totalEggs);
+  schedulePersistRuntimeState();
+}
+
+function showToast(message) {
+  if (!toast) {
+    return;
+  }
+  toast.textContent = message;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 1800);
+}
+
+function getHelpMode() {
+  if (state.mode === "hide") {
+    return "hide";
+  }
+  if (state.mode === "find") {
+    return "find";
+  }
+  return "complete";
+}
+
+function openHelpModal() {
+  if (!helpModal) {
+    return;
+  }
+  helpLastFocus = document.activeElement;
+  const mode = getHelpMode();
+  helpTitle.textContent = mode === "hide" ? "Help: Place Egg Mode" : "Help: Find Mode";
+  helpBody.innerHTML = "";
+  HELP_COPY[mode].forEach((line) => {
+    const li = document.createElement("li");
+    li.textContent = line;
+    helpBody.appendChild(li);
+  });
+  helpModal.hidden = false;
+  helpModal.setAttribute("aria-hidden", "false");
+  state.helpOpen = true;
+  helpCloseBtn.focus();
+  trackEvent("helpOpened");
+  if (state.dragging) {
+    state.dragging = null;
+  }
+}
+
+function closeHelpModal() {
+  if (!helpModal || helpModal.hidden) {
+    return;
+  }
+  helpModal.hidden = true;
+  helpModal.setAttribute("aria-hidden", "true");
+  state.helpOpen = false;
+  if (helpLastFocus && typeof helpLastFocus.focus === "function") {
+    helpLastFocus.focus();
+  }
+}
+
+function isLandscape() {
+  const bySize = window.innerWidth >= window.innerHeight;
+  if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === "number") {
+    const angle = Math.abs(window.screen.orientation.angle) % 180;
+    const byAngle = angle === 90;
+    return bySize || byAngle;
+  }
+  return bySize;
+}
+
+async function setOrientationForScreen(screenName) {
+  const orientationApi = window.screen && window.screen.orientation;
+  if (!orientationApi || typeof orientationApi.lock !== "function") {
+    orientationLockActive = false;
+    updateRotateOverlay();
+    return;
+  }
+
+  try {
+    if (screenName === "game") {
+      await orientationApi.lock("landscape");
+      orientationLockActive = true;
+    } else if (typeof orientationApi.unlock === "function") {
+      orientationApi.unlock();
+      orientationLockActive = false;
+    }
+  } catch {
+    orientationLockActive = false;
+  }
+  updateRotateOverlay();
+}
+
+function updateRotateOverlay() {
+  const shouldShow = false;
+  rotateOverlay.hidden = !shouldShow;
 }
 
 function trackEvent(name) {
@@ -224,8 +378,7 @@ function applySnapshot(snapshot) {
   state.eggs.forEach((egg) => normalizeEgg(egg));
   state.sceneObjects.forEach((prop) => normalizeProp(prop));
 
-  eggCountInput.value = String(state.totalEggs);
-  eggCountValue.textContent = String(state.totalEggs);
+  setEggCount(state.totalEggs);
 }
 
 function restoreRuntimeState() {
@@ -271,8 +424,11 @@ function handleLifecycleStateChange(isVisible) {
 }
 
 function resetRound() {
+  closeHelpModal();
+  clearShelfDragState();
+  mobileShelfFallbackEnabled = false;
   state.mode = "setup";
-  state.totalEggs = Number(eggCountInput.value);
+  setEggCount(state.totalEggs);
   state.eggs = [];
   state.sceneObjects = [];
   state.nextObjectId = 1;
@@ -292,8 +448,10 @@ function resetRound() {
 }
 
 function startHideMode() {
+  clearShelfDragState();
   state.mode = "hide";
-  state.totalEggs = Number(eggCountInput.value);
+  mobileShelfFallbackEnabled = false;
+  setEggCount(state.totalEggs);
   state.eggs = [];
   state.sceneObjects = [];
   state.nextObjectId = 1;
@@ -338,10 +496,13 @@ function replayCurrentHunt() {
 
 function renderStatus() {
   if (state.mode === "hide") {
+    if (restartBtn) {
+      restartBtn.textContent = "↺";
+      restartBtn.setAttribute("aria-label", "Start over");
+      restartBtn.title = "Start over";
+    }
     modeText.textContent =
-      state.hideTool === "eggs"
-        ? "Hide Mode: drag eggs from shelf. Drag item to move. Drag R/S handles to rotate/scale."
-        : "Hide Mode: drag props from shelf. Drag item to move. Drag R/S handles to rotate/scale.";
+      state.hideTool === "eggs" ? "Hide Mode: Place eggs in the scene." : "Hide Mode: Place props in the scene.";
     counterText.textContent = `Eggs: ${state.eggs.length}/${state.totalEggs} | Props: ${state.sceneObjects.length}`;
     nextBtn.disabled = state.eggs.length !== state.totalEggs;
     nextBtn.textContent = "Pass to Finder";
@@ -359,11 +520,16 @@ function renderStatus() {
   }
 
   if (state.mode === "find") {
-    modeText.textContent = "Find Mode: tap to find eggs";
+    if (restartBtn) {
+      restartBtn.textContent = "↺";
+      restartBtn.setAttribute("aria-label", "Start over");
+      restartBtn.title = "Start over";
+    }
+    modeText.textContent = "Find Mode: Tap to find eggs.";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
     nextBtn.disabled = true;
     nextBtn.textContent = "Pass to Finder";
-    nextBtn.hidden = false;
+    nextBtn.hidden = true;
     hintBtn.hidden = false;
     hintBtn.disabled = state.wandUses < 1;
     hintText.hidden = false;
@@ -376,6 +542,11 @@ function renderStatus() {
   }
 
   if (state.mode === "complete") {
+    if (restartBtn) {
+      restartBtn.textContent = "↺";
+      restartBtn.setAttribute("aria-label", "Start over");
+      restartBtn.title = "Start over";
+    }
     modeText.textContent = "Great job! All eggs found.";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
     nextBtn.hidden = true;
@@ -587,20 +758,145 @@ function findObjectAt(point) {
   return hit;
 }
 
+function clearShelfDragState() {
+  shelfDragState = null;
+  if (dragGhost) {
+    dragGhost.hidden = true;
+    dragGhost.classList.remove("prop");
+    dragGhost.style.backgroundImage = "";
+  }
+}
+
+function updateDragGhostFromPointer(event) {
+  if (!dragGhost) {
+    return;
+  }
+  dragGhost.style.left = `${event.clientX}px`;
+  dragGhost.style.top = `${event.clientY}px`;
+}
+
+function activateTapPlaceFallback() {
+  if (mobileShelfFallbackEnabled) {
+    return;
+  }
+  mobileShelfFallbackEnabled = true;
+  showToast("Using tap-then-place mode for shelf items.");
+}
+
+function queueTapPlacement(sourceType, index, kind = null) {
+  shelfDragState = {
+    sourceType,
+    index,
+    kind,
+    stage: "tap-await-scene",
+  };
+  showToast("Tap the scene to place item.");
+}
+
+function beginShelfGhostDrag({ sourceType, index, kind, asset, pointerId, event }) {
+  shelfDragState = {
+    pointerId,
+    sourceType,
+    index,
+    kind,
+    asset,
+    stage: "ghost",
+    moved: false,
+    startX: event.clientX,
+    startY: event.clientY,
+  };
+  if (!dragGhost) {
+    activateTapPlaceFallback();
+    queueTapPlacement(sourceType, index, kind);
+    return;
+  }
+  dragGhost.hidden = false;
+  dragGhost.classList.toggle("prop", sourceType === "prop");
+  dragGhost.style.backgroundImage = asset ? `url("${asset}")` : "";
+  updateDragGhostFromPointer(event);
+}
+
+function attachShelfInteraction(button, config) {
+  button.addEventListener("pointerdown", (event) => {
+    if (state.mode !== "hide") {
+      return;
+    }
+    event.preventDefault();
+    if (mobileShelfFallbackEnabled) {
+      queueTapPlacement(config.sourceType, config.getIndex(), config.kind || null);
+      return;
+    }
+    beginShelfGhostDrag({
+      ...config,
+      pointerId: event.pointerId,
+      event,
+      index: config.getIndex(),
+    });
+  });
+}
+
+function handleGlobalShelfPointerMove(event) {
+  if (!shelfDragState || shelfDragState.pointerId !== event.pointerId || shelfDragState.stage !== "ghost") {
+    return;
+  }
+  const dx = event.clientX - shelfDragState.startX;
+  const dy = event.clientY - shelfDragState.startY;
+  if (dx * dx + dy * dy > 36) {
+    shelfDragState.moved = true;
+  }
+  updateDragGhostFromPointer(event);
+}
+
+function handleGlobalShelfPointerUp(event) {
+  if (!shelfDragState || shelfDragState.pointerId !== event.pointerId) {
+    return;
+  }
+  const current = shelfDragState;
+  if (current.stage !== "ghost") {
+    return;
+  }
+  const upDx = event.clientX - current.startX;
+  const upDy = event.clientY - current.startY;
+  const movedEnough = current.moved || upDx * upDx + upDy * upDy > 36;
+  if (!movedEnough) {
+    queueTapPlacement(current.sourceType, current.index, current.kind || null);
+    if (dragGhost) {
+      dragGhost.hidden = true;
+    }
+    return;
+  }
+  const rect = scene.getBoundingClientRect();
+  const insideScene =
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom;
+  if (insideScene) {
+    const point = sceneCoordsFromClient(event.clientX, event.clientY);
+    if (current.sourceType === "egg") {
+      placeEggFromShelf(current.index, point);
+    } else {
+      placePropFromShelf(current.kind, point);
+    }
+  } else {
+    showToast("Drop inside the scene to place.");
+  }
+  clearShelfDragState();
+}
+
 function renderPropPicker() {
   propPicker.innerHTML = "";
   if (state.mode !== "hide" || state.hideTool !== "props") {
     return;
   }
-  propShelfLabel.textContent = "Prop Shelf (unlimited drag)";
+  propShelfLabel.textContent = "Prop Shelf (press-hold and drop)";
 
   COMMON_PROP_KINDS.forEach((kind) => {
     const propEl = document.createElement("button");
     propEl.type = "button";
     propEl.className = "shelf-prop";
-    propEl.draggable = true;
     propEl.dataset.kind = kind;
-    propEl.title = `Drag ${kind.replace("-", " ")} into scene`;
+    propEl.title = `Press and hold to place ${kind.replace("-", " ")}`;
     const propAsset = PROP_ASSET_MAP[kind];
     if (propAsset) {
       propEl.classList.add("image-prop");
@@ -611,9 +907,11 @@ function renderPropPicker() {
       label.textContent = PROP_ICON_MAP[kind] || kind.replace("-", " ");
       propEl.appendChild(label);
     }
-    propEl.addEventListener("dragstart", (event) => {
-      event.dataTransfer.setData("text/plain", `prop:${kind}`);
-      event.dataTransfer.effectAllowed = "copy";
+    attachShelfInteraction(propEl, {
+      sourceType: "prop",
+      kind,
+      asset: propAsset,
+      getIndex: () => -1,
     });
     propPicker.appendChild(propEl);
   });
@@ -630,18 +928,19 @@ function renderEggShelf() {
     const shelfEgg = document.createElement("button");
     shelfEgg.type = "button";
     shelfEgg.className = "shelf-egg";
-    shelfEgg.draggable = true;
     shelfEgg.dataset.eggIndex = String(index);
-    shelfEgg.title = "Drag into the scene";
+    shelfEgg.title = "Press and hold to place in scene";
     if (egg.asset) {
       shelfEgg.style.backgroundImage = `url("${egg.asset}")`;
       shelfEgg.classList.add("image-egg");
     } else {
       shelfEgg.classList.add(`pattern-${egg.pattern ?? 0}`);
     }
-    shelfEgg.addEventListener("dragstart", (event) => {
-      event.dataTransfer.setData("text/plain", `egg:${index}`);
-      event.dataTransfer.effectAllowed = "copyMove";
+    attachShelfInteraction(shelfEgg, {
+      sourceType: "egg",
+      kind: null,
+      asset: egg.asset,
+      getIndex: () => index,
     });
     eggShelf.appendChild(shelfEgg);
   });
@@ -1137,26 +1436,33 @@ function finishHunt() {
   schedulePersistRuntimeState();
 }
 
-eggCountInput.addEventListener("input", () => {
-  eggCountValue.textContent = eggCountInput.value;
-  state.totalEggs = Number(eggCountInput.value);
-  schedulePersistRuntimeState();
+eggMinusBtn.addEventListener("click", () => {
+  setEggCount(state.totalEggs - 1);
 });
 
-soundToggleBtn.addEventListener("click", () => {
+eggPlusBtn.addEventListener("click", () => {
+  setEggCount(state.totalEggs + 1);
+});
+
+function toggleSound() {
   state.soundEnabled = !state.soundEnabled;
   localStorage.setItem(SETTINGS_KEYS.sound, state.soundEnabled ? "1" : "0");
   updateSoundButton();
   schedulePersistRuntimeState();
-});
+}
 
-musicToggleBtn.addEventListener("click", () => {
+function toggleMusic() {
   state.musicEnabled = !state.musicEnabled;
   localStorage.setItem(SETTINGS_KEYS.music, state.musicEnabled ? "1" : "0");
   updateMusicButton();
   syncBackgroundMusic();
   schedulePersistRuntimeState();
-});
+}
+
+soundToggleBtn.addEventListener("click", toggleSound);
+setupSoundToggleBtn.addEventListener("click", toggleSound);
+musicToggleBtn.addEventListener("click", toggleMusic);
+setupMusicToggleBtn.addEventListener("click", toggleMusic);
 
 startHideBtn.addEventListener("click", startHideMode);
 eggToolBtn.addEventListener("click", () => {
@@ -1169,12 +1475,42 @@ propToolBtn.addEventListener("click", () => {
 });
 nextBtn.addEventListener("click", startFindMode);
 hintBtn.addEventListener("click", useHint);
-restartBtn.addEventListener("click", resetRound);
+restartBtn.addEventListener("click", () => {
+  closeHelpModal();
+  resetRound();
+});
 playAgainBtn.addEventListener("click", replayCurrentHunt);
 newHuntBtn.addEventListener("click", resetRound);
+helpBtn.addEventListener("click", openHelpModal);
+helpCloseBtn.addEventListener("click", closeHelpModal);
+helpModal.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.dataset.closeModal === "true") {
+    closeHelpModal();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeHelpModal();
+  }
+});
 
 scene.addEventListener("pointerdown", (event) => {
+  if (state.helpOpen) {
+    return;
+  }
   if (state.mode === "hide") {
+    if (shelfDragState && shelfDragState.stage === "tap-await-scene") {
+      event.preventDefault();
+      const point = sceneCoordsFromEvent(event);
+      if (shelfDragState.sourceType === "egg") {
+        placeEggFromShelf(shelfDragState.index, point);
+      } else if (shelfDragState.sourceType === "prop") {
+        const kind = shelfDragState.kind || state.selectedPropKind || COMMON_PROP_KINDS[0];
+        placePropFromShelf(kind, point);
+      }
+      clearShelfDragState();
+      return;
+    }
     event.preventDefault();
     handleHideTap(event);
   } else if (state.mode === "find") {
@@ -1182,18 +1518,27 @@ scene.addEventListener("pointerdown", (event) => {
   }
 });
 scene.addEventListener("pointermove", (event) => {
+  if (state.helpOpen) {
+    return;
+  }
   if (state.mode !== "hide") {
     return;
   }
   handleHideDrag(event);
 });
 scene.addEventListener("pointerup", (event) => {
+  if (state.helpOpen) {
+    return;
+  }
   if (state.mode !== "hide") {
     return;
   }
   endHideDrag(event);
 });
 scene.addEventListener("pointercancel", (event) => {
+  if (state.helpOpen) {
+    return;
+  }
   if (state.mode !== "hide") {
     return;
   }
@@ -1230,6 +1575,9 @@ scene.addEventListener("drop", (event) => {
   }
 });
 scene.addEventListener("contextmenu", (event) => event.preventDefault());
+window.addEventListener("pointermove", handleGlobalShelfPointerMove);
+window.addEventListener("pointerup", handleGlobalShelfPointerUp);
+window.addEventListener("pointercancel", handleGlobalShelfPointerUp);
 
 window.addEventListener("visibilitychange", () => {
   handleLifecycleStateChange(!document.hidden);
@@ -1260,16 +1608,33 @@ document.addEventListener(
   { once: true }
 );
 
-if (restoreRuntimeState()) {
-  renderThemePicker();
-  renderPropPicker();
-  renderScene();
-  renderStatus();
-  showScreen(state.mode === "setup" ? "setup" : "game");
-} else {
-  renderThemePicker();
-  resetRound();
+window.addEventListener("resize", updateRotateOverlay);
+window.addEventListener("orientationchange", updateRotateOverlay);
+
+async function initializeApp() {
+  try {
+    restoreRuntimeState();
+    renderThemePicker();
+    renderPropPicker();
+    renderScene();
+    renderStatus();
+    resetRound();
+    showScreen("setup");
+    renderThemePicker();
+    renderPropPicker();
+    renderScene();
+    renderStatus();
+  } catch {
+    resetRound();
+    showScreen("setup");
+    renderThemePicker();
+    renderPropPicker();
+    renderScene();
+    renderStatus();
+  }
 }
+
+initializeApp();
 
 window.EggHuntMetrics = {
   read() {

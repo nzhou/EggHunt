@@ -9,71 +9,106 @@
   </head>
   <body>
     <main class="app">
-      <header class="topbar">
-        <h1>EggHunt</h1>
-        <div class="topbar-actions">
-          <button id="musicToggleBtn" class="ghost" type="button" aria-pressed="false">🎵 Music On</button>
-          <button id="soundToggleBtn" class="ghost" type="button" aria-pressed="false">🔊 Sound On</button>
-          <button id="restartBtn" class="ghost">Start Over</button>
+      <section id="setupScreen" class="screen active" aria-labelledby="setupTitle">
+        <div class="card setup-panel">
+          <div class="setup-title-row">
+            <h2 id="setupTitle">Create a Hunt</h2>
+            <div class="utility-bar setup-utility">
+              <button id="setupMusicToggleBtn" class="ghost compact-btn" type="button" aria-pressed="false" aria-label="Toggle music" title="Toggle music">🎵</button>
+              <button id="setupSoundToggleBtn" class="ghost compact-btn" type="button" aria-pressed="false" aria-label="Toggle sound" title="Toggle sound">🔊</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Theme</label>
+            <div id="themePicker" class="theme-picker" role="radiogroup" aria-label="Choose theme"></div>
+          </div>
+
+          <div class="field stepper-field">
+            <div class="stepper-row">
+              <label for="eggCountValue">How many eggs?</label>
+              <div class="stepper" aria-label="Egg count control">
+                <button id="eggMinusBtn" class="ghost" type="button" aria-label="Decrease egg count">−</button>
+                <output id="eggCountValue" for="eggMinusBtn eggPlusBtn">6</output>
+                <button id="eggPlusBtn" class="ghost" type="button" aria-label="Increase egg count">+</button>
+              </div>
+            </div>
+          </div>
         </div>
-      </header>
 
-      <section id="setupScreen" class="card screen active" aria-labelledby="setupTitle">
-        <h2 id="setupTitle">Create a Hunt</h2>
-
-        <div class="field">
-          <label>Theme</label>
-          <div id="themePicker" class="theme-picker" role="radiogroup" aria-label="Choose theme"></div>
+        <div class="setup-cta-wrap">
+          <button id="startHideBtn" class="primary setup-cta">Start Hiding Eggs</button>
         </div>
-
-        <div class="field">
-          <label for="eggCount">How many eggs?</label>
-          <input id="eggCount" type="range" min="3" max="12" value="6" />
-          <p><strong id="eggCountValue">6</strong> eggs</p>
-        </div>
-
-        <button id="startHideBtn" class="primary">Start Hiding Eggs</button>
       </section>
 
       <section id="gameScreen" class="screen" aria-live="polite">
-        <div class="card statusbar">
-          <p id="modeText">Hide Mode</p>
-          <p id="counterText">Placed: 0/6</p>
-          <p id="hintText" hidden>Wands left: 3</p>
-        </div>
+        <header class="utility-bar game-utility">
+          <button id="musicToggleBtn" class="ghost compact-btn" type="button" aria-pressed="false" aria-label="Toggle music" title="Toggle music">🎵</button>
+          <button id="soundToggleBtn" class="ghost compact-btn" type="button" aria-pressed="false" aria-label="Toggle sound" title="Toggle sound">🔊</button>
+          <button id="helpBtn" class="ghost compact-btn" type="button" aria-label="Help" title="Help">❔</button>
+          <button id="restartBtn" class="ghost compact-btn restart-btn" type="button" aria-label="Start over" title="Start over">↺</button>
+        </header>
 
-        <div id="hideToolsPanel" class="card hide-tools" hidden>
-          <div class="tool-switch">
-            <button id="eggToolBtn" class="ghost" type="button">Place Eggs</button>
-            <button id="propToolBtn" class="ghost" type="button">Place Props</button>
-          </div>
-          <div id="eggShelfWrap" class="egg-shelf-wrap" hidden>
-            <p id="eggShelfLabel">Egg Shelf (drag to scene)</p>
-            <div id="eggShelf" class="egg-shelf" aria-label="Egg shelf"></div>
-          </div>
-          <div id="propShelfWrap" class="egg-shelf-wrap" hidden>
-            <p id="propShelfLabel">Prop Shelf (drag to scene)</p>
-            <div id="propPicker" class="egg-shelf" aria-label="Prop shelf"></div>
-          </div>
-        </div>
+        <div class="game-main">
+          <div id="scene" class="scene" role="button" tabindex="0" aria-label="Egg hunt scene"></div>
 
-        <div id="scene" class="scene" role="button" tabindex="0" aria-label="Egg hunt scene"></div>
+          <div class="game-side">
+            <div class="card statusbar">
+              <p id="modeText">Hide Mode</p>
+              <p id="counterText">Placed: 0/6</p>
+              <p id="hintText" hidden>Wands left: 3</p>
+            </div>
 
-        <div id="completePanel" class="card complete-panel" hidden>
-          <h2>All Eggs Found</h2>
-          <p id="winSummary"></p>
-          <div class="actions">
-            <button id="playAgainBtn" class="primary">Play Again</button>
-            <button id="newHuntBtn" class="secondary">New Hunt</button>
+            <div id="hideToolsPanel" class="card hide-tools" hidden>
+              <div class="tool-switch">
+                <button id="eggToolBtn" class="ghost" type="button">Place Eggs</button>
+                <button id="propToolBtn" class="ghost" type="button">Place Props</button>
+              </div>
+              <div id="eggShelfWrap" class="egg-shelf-wrap" hidden>
+                <p id="eggShelfLabel">Egg Shelf (drag to scene)</p>
+                <div id="eggShelf" class="egg-shelf" aria-label="Egg shelf"></div>
+              </div>
+              <div id="propShelfWrap" class="egg-shelf-wrap" hidden>
+                <p id="propShelfLabel">Prop Shelf (drag to scene)</p>
+                <div id="propPicker" class="egg-shelf" aria-label="Prop shelf"></div>
+              </div>
+            </div>
+
+            <div id="completePanel" class="card complete-panel" hidden>
+              <h2>All Eggs Found</h2>
+              <p id="winSummary"></p>
+              <div class="actions">
+                <button id="playAgainBtn" class="secondary">Play Again</button>
+                <button id="newHuntBtn" class="primary">New Hunt</button>
+              </div>
+            </div>
+
+            <div class="actions action-stack">
+              <button id="nextBtn" class="primary" disabled>Pass to Finder</button>
+              <button id="hintBtn" class="secondary" hidden>Use Magic Wand</button>
+            </div>
           </div>
-        </div>
-
-        <div class="actions">
-          <button id="nextBtn" class="primary" disabled>Pass to Finder</button>
-          <button id="hintBtn" class="secondary" hidden>Use Magic Wand</button>
         </div>
       </section>
     </main>
+
+    <div id="helpModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-content">
+        <h2 id="helpTitle">How To Play</h2>
+        <ul id="helpBody"></ul>
+        <button id="helpCloseBtn" class="primary" type="button">Close</button>
+      </div>
+    </div>
+
+    <div id="dragGhost" class="drag-ghost" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+
+    <div id="rotateOverlay" class="rotate-overlay" hidden>
+      <div class="rotate-card">
+        <p>Rotate your device to landscape to keep hunting.</p>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>
