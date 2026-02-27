@@ -185,14 +185,20 @@ label {
 }
 
 .stepper-field {
-  margin-top: -2px;
+  margin-top: 0;
+  padding-top: 4px;
 }
 
 .stepper-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  min-height: 48px;
+  position: relative;
+  z-index: 2;
+  background: var(--card);
+  border-radius: 12px;
 }
 
 .stepper-row label {

@@ -855,16 +855,6 @@ function handleGlobalShelfPointerUp(event) {
   if (current.stage !== "ghost") {
     return;
   }
-  const upDx = event.clientX - current.startX;
-  const upDy = event.clientY - current.startY;
-  const movedEnough = current.moved || upDx * upDx + upDy * upDy > 36;
-  if (!movedEnough) {
-    queueTapPlacement(current.sourceType, current.index, current.kind || null);
-    if (dragGhost) {
-      dragGhost.hidden = true;
-    }
-    return;
-  }
   const rect = scene.getBoundingClientRect();
   const insideScene =
     event.clientX >= rect.left &&
@@ -879,6 +869,16 @@ function handleGlobalShelfPointerUp(event) {
       placePropFromShelf(current.kind, point);
     }
   } else {
+    const upDx = event.clientX - current.startX;
+    const upDy = event.clientY - current.startY;
+    const movedEnough = current.moved || upDx * upDx + upDy * upDy > 36;
+    if (!movedEnough) {
+      queueTapPlacement(current.sourceType, current.index, current.kind || null);
+      if (dragGhost) {
+        dragGhost.hidden = true;
+      }
+      return;
+    }
     showToast("Drop inside the scene to place.");
   }
   clearShelfDragState();
