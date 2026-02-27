@@ -105,6 +105,7 @@ const propShelfWrap = document.getElementById("propShelfWrap");
 const propShelfLabel = document.getElementById("propShelfLabel");
 const propPicker = document.getElementById("propPicker");
 const nextBtn = document.getElementById("nextBtn");
+const shareBtn = document.getElementById("shareBtn");
 const hintBtn = document.getElementById("hintBtn");
 const restartBtn = document.getElementById("restartBtn");
 const helpBtn = document.getElementById("helpBtn");
@@ -120,12 +121,27 @@ const helpModal = document.getElementById("helpModal");
 const helpTitle = document.getElementById("helpTitle");
 const helpBody = document.getElementById("helpBody");
 const helpCloseBtn = document.getElementById("helpCloseBtn");
+const shareModal = document.getElementById("shareModal");
+const shareDraftBody = document.getElementById("shareDraftBody");
+const shareStatusText = document.getElementById("shareStatusText");
+const shareCopyDraftBtn = document.getElementById("shareCopyDraftBtn");
+const shareCloseBtn = document.getElementById("shareCloseBtn");
 const toast = document.getElementById("toast");
 const dragGhost = document.getElementById("dragGhost");
 const rotateOverlay = document.getElementById("rotateOverlay");
 let audioCtx = null;
 let bgmAudio = null;
 let bgmPausedByLifecycle = false;
+let celebrationCanvas = null;
+let celebrationCtx = null;
+let celebrationRaf = null;
+let celebrationParticles = [];
+let celebrationStartedAt = 0;
+let celebrationLastFrameAt = 0;
+let celebrationBurstCount = 0;
+let celebrationNextBurstAt = 0;
+let celebrationResizeHandler = null;
+let noiseBuffer = null;
 let persistTimer = null;
 let toastTimer = null;
 let helpLastFocus = null;
@@ -134,6 +150,10 @@ let mobileShelfFallbackEnabled = false;
 let orientationLockActive = false;
 const EGG_MIN_COUNT = 3;
 const EGG_MAX_COUNT = 12;
+const HUNT_SCHEMA_VERSION = 1;
+const SHARE_PARAM_KEY = "hunt";
+const THEME_ORDER = ["garden", "forest", "playground", "indoor"];
+const FIREWORK_COLORS = ["#ff6b6b", "#ffd166", "#06d6a0", "#4cc9f0", "#f72585", "#f9844a"];
 const HELP_COPY = {
   hide: [
     "Press and hold an egg or prop in the shelf.",
@@ -154,6 +174,9 @@ function showScreen(name) {
   state.screen = name;
   setupScreen.classList.toggle("active", name === "setup");
   gameScreen.classList.toggle("active", name === "game");
+  if (name !== "game") {
+    closeShareModal();
+  }
   void setOrientationForScreen(name);
   updateRotateOverlay();
   setTimeout(updateRotateOverlay, 120);
@@ -219,6 +242,292 @@ function setEggCount(value) {
   state.totalEggs = clamp(Number(value) || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT);
   eggCountValue.textContent = String(state.totalEggs);
   schedulePersistRuntimeState();
+}
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecodeToBytes(encoded) {
+  const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4 ? "=".repeat(4 - (normalized.length % 4)) : "";
+  const binary = atob(normalized + pad);
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+function quantize(value, min, max, bits) {
+  const steps = (1 << bits) - 1;
+  const clamped = clamp(Number(value) || 0, min, max);
+  return Math.round(((clamped - min) / (max - min)) * steps);
+}
+
+function dequantize(value, min, max, bits) {
+  const steps = (1 << bits) - 1;
+  const ratio = clamp(value, 0, steps) / steps;
+  return min + ratio * (max - min);
+}
+
+class BitWriter {
+  constructor() {
+    this.bytes = [];
+    this.current = 0;
+    this.bitPos = 0;
+  }
+
+  write(value, bits) {
+    for (let i = bits - 1; i >= 0; i -= 1) {
+      const bit = (value >> i) & 1;
+      this.current = (this.current << 1) | bit;
+      this.bitPos += 1;
+      if (this.bitPos === 8) {
+        this.bytes.push(this.current);
+        this.current = 0;
+        this.bitPos = 0;
+      }
+    }
+  }
+
+  toUint8Array() {
+    if (this.bitPos > 0) {
+      this.current <<= 8 - this.bitPos;
+      this.bytes.push(this.current);
+      this.current = 0;
+      this.bitPos = 0;
+    }
+    return Uint8Array.from(this.bytes);
+  }
+}
+
+class BitReader {
+  constructor(bytes) {
+    this.bytes = bytes;
+    this.bytePos = 0;
+    this.bitPos = 0;
+  }
+
+  read(bits) {
+    let value = 0;
+    for (let i = 0; i < bits; i += 1) {
+      if (this.bytePos >= this.bytes.length) {
+        throw new Error("Unexpected end of payload");
+      }
+      const currentByte = this.bytes[this.bytePos];
+      const bit = (currentByte >> (7 - this.bitPos)) & 1;
+      value = (value << 1) | bit;
+      this.bitPos += 1;
+      if (this.bitPos === 8) {
+        this.bitPos = 0;
+        this.bytePos += 1;
+      }
+    }
+    return value;
+  }
+}
+
+function buildCompactSharePayload() {
+  const writer = new BitWriter();
+  const themeIndex = Math.max(0, THEME_ORDER.indexOf(state.theme));
+  const eggCount = clamp(state.eggs.length, 0, 15);
+  const propCount = clamp(state.sceneObjects.length, 0, 63);
+
+  writer.write(HUNT_SCHEMA_VERSION, 3);
+  writer.write(themeIndex, 2);
+  writer.write(clamp(state.totalEggs, 0, 15), 4);
+  writer.write(eggCount, 4);
+  writer.write(propCount, 6);
+
+  state.eggs.slice(0, eggCount).forEach((egg) => {
+    writer.write(quantize(egg.x, 0, 100, 7), 7);
+    writer.write(quantize(egg.y, 0, 100, 7), 7);
+    writer.write(quantize(egg.scale ?? 1, 0.55, 1.9, 5), 5);
+    writer.write(quantize(egg.rotate ?? 0, -180, 180, 8), 8);
+    writer.write(egg.flipX === -1 ? 1 : 0, 1);
+    writer.write(clamp(EGG_ASSET_PATHS.indexOf(egg.asset), 0, 7), 3);
+  });
+
+  state.sceneObjects.slice(0, propCount).forEach((prop) => {
+    writer.write(clamp(COMMON_PROP_KINDS.indexOf(prop.kind), 0, 15), 4);
+    writer.write(quantize(prop.x, 0, 100, 7), 7);
+    writer.write(quantize(prop.y, 0, 100, 7), 7);
+    writer.write(quantize(prop.scale ?? 1, 0.55, 1.9, 5), 5);
+    writer.write(quantize(prop.rotate ?? 0, -180, 180, 8), 8);
+    writer.write(prop.flipX === -1 ? 1 : 0, 1);
+  });
+
+  return writer.toUint8Array();
+}
+
+function parseCompactSharePayload(bytes) {
+  const reader = new BitReader(bytes);
+  const version = reader.read(3);
+  if (version !== HUNT_SCHEMA_VERSION) {
+    throw new Error("Unsupported shared hunt version");
+  }
+
+  const themeIndex = reader.read(2);
+  const totalEggs = reader.read(4);
+  const eggCount = reader.read(4);
+  const propCount = reader.read(6);
+
+  const eggs = [];
+  for (let i = 0; i < eggCount; i += 1) {
+    const x = dequantize(reader.read(7), 0, 100, 7);
+    const y = dequantize(reader.read(7), 0, 100, 7);
+    const scale = dequantize(reader.read(5), 0.55, 1.9, 5);
+    const rotate = dequantize(reader.read(8), -180, 180, 8);
+    const flipBit = reader.read(1);
+    const assetIndex = reader.read(3);
+    eggs.push({
+      found: false,
+      foundAt: null,
+      pattern: randomPattern(),
+      asset: EGG_ASSET_PATHS[assetIndex] || randomEggAsset(),
+      x: clamp(x, 2, 98),
+      y: clamp(y, 2, 98),
+      scale: clamp(scale, 0.55, 1.9),
+      rotate: clamp(rotate, -180, 180),
+      flipX: flipBit ? -1 : 1,
+      hitRadius: 4.9,
+    });
+  }
+
+  const props = [];
+  for (let i = 0; i < propCount; i += 1) {
+    const kindIndex = reader.read(4);
+    const x = dequantize(reader.read(7), 0, 100, 7);
+    const y = dequantize(reader.read(7), 0, 100, 7);
+    const scale = dequantize(reader.read(5), 0.55, 1.9, 5);
+    const rotate = dequantize(reader.read(8), -180, 180, 8);
+    const flipBit = reader.read(1);
+    props.push({
+      id: i + 1,
+      kind: COMMON_PROP_KINDS[kindIndex] || COMMON_PROP_KINDS[0],
+      x: clamp(x, 2, 98),
+      y: clamp(y, 2, 98),
+      rotate: clamp(rotate, -180, 180),
+      scale: clamp(scale, 0.55, 1.9),
+      flipX: flipBit ? -1 : 1,
+      opacity: 1,
+    });
+  }
+
+  return {
+    theme: THEME_ORDER[themeIndex] || "garden",
+    totalEggs: clamp(totalEggs || eggs.length || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT),
+    eggs,
+    props,
+  };
+}
+
+function buildShareUrl() {
+  const payloadBytes = buildCompactSharePayload();
+  const encoded = base64UrlEncodeBytes(payloadBytes);
+  const url = new URL(window.location.href);
+  url.searchParams.set(SHARE_PARAM_KEY, encoded);
+  return url.toString();
+}
+
+function buildShareMessage(shareUrl) {
+  return [
+    "Hi!",
+    "",
+    "I made an EggHunt challenge for you.",
+    "Open this link to start finding eggs:",
+    shareUrl,
+    "",
+    "Have fun!",
+  ].join("\n");
+}
+
+function setShareStatus(message) {
+  if (!shareStatusText) {
+    return;
+  }
+  shareStatusText.textContent = message;
+}
+
+function closeShareModal() {
+  if (!shareModal || shareModal.hidden) {
+    return;
+  }
+  shareModal.hidden = true;
+}
+
+function openShareModal() {
+  if (!shareModal || !shareDraftBody) {
+    return;
+  }
+  if (state.mode !== "hide" || state.eggs.length !== state.totalEggs) {
+    return;
+  }
+  const shareUrl = buildShareUrl();
+  shareDraftBody.value = buildShareMessage(shareUrl);
+  setShareStatus("");
+  shareModal.hidden = false;
+  shareDraftBody.focus();
+  shareDraftBody.select();
+}
+
+async function copyShareDraft() {
+  if (!shareDraftBody) {
+    return;
+  }
+  const draft = shareDraftBody.value || buildShareMessage(buildShareUrl());
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(draft);
+      setShareStatus("Message copied.");
+      return;
+    }
+  } catch {
+    // Fallback below.
+  }
+
+  shareDraftBody.focus();
+  shareDraftBody.select();
+  const copied = document.execCommand("copy");
+  setShareStatus(copied ? "Message copied." : "Copy failed. Please copy manually.");
+}
+
+function loadSharedHuntFromUrl() {
+  const url = new URL(window.location.href);
+  const raw = url.searchParams.get(SHARE_PARAM_KEY);
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const bytes = base64UrlDecodeToBytes(raw);
+    const payload = parseCompactSharePayload(bytes);
+
+    state.theme = THEME_BACKGROUND_MAP[payload.theme] ? payload.theme : "garden";
+    setEggCount(payload.totalEggs);
+    state.eggs = payload.eggs;
+    state.eggs.forEach((egg) => normalizeEgg(egg));
+    state.sceneObjects = payload.props;
+    state.sceneObjects.forEach((prop) => normalizeProp(prop));
+    state.nextObjectId = state.sceneObjects.length + 1;
+    state.pendingEggs = [];
+    state.hideTool = "eggs";
+    state.selectedPropKind = COMMON_PROP_KINDS[0];
+    state.selectedItem = null;
+    state.dragging = null;
+    state.foundCount = 0;
+    state.wandUses = 3;
+    state.mode = "find";
+    showScreen("game");
+    renderThemePicker();
+    renderPropPicker();
+    renderScene();
+    renderStatus();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function showToast(message) {
@@ -424,7 +733,9 @@ function handleLifecycleStateChange(isVisible) {
 }
 
 function resetRound() {
+  stopCelebrationFireworks();
   closeHelpModal();
+  closeShareModal();
   clearShelfDragState();
   mobileShelfFallbackEnabled = false;
   state.mode = "setup";
@@ -448,6 +759,7 @@ function resetRound() {
 }
 
 function startHideMode() {
+  stopCelebrationFireworks();
   clearShelfDragState();
   state.mode = "hide";
   mobileShelfFallbackEnabled = false;
@@ -478,6 +790,7 @@ function startFindMode() {
 }
 
 function replayCurrentHunt() {
+  stopCelebrationFireworks();
   state.mode = "find";
   state.foundCount = 0;
   state.wandUses = 3;
@@ -507,6 +820,10 @@ function renderStatus() {
     nextBtn.disabled = state.eggs.length !== state.totalEggs;
     nextBtn.textContent = "Pass to Finder";
     nextBtn.hidden = false;
+    if (shareBtn) {
+      shareBtn.hidden = false;
+      shareBtn.disabled = state.eggs.length !== state.totalEggs;
+    }
     hintBtn.hidden = true;
     hintText.hidden = true;
     completePanel.hidden = true;
@@ -530,6 +847,9 @@ function renderStatus() {
     nextBtn.disabled = true;
     nextBtn.textContent = "Pass to Finder";
     nextBtn.hidden = true;
+    if (shareBtn) {
+      shareBtn.hidden = true;
+    }
     hintBtn.hidden = false;
     hintBtn.disabled = state.wandUses < 1;
     hintText.hidden = false;
@@ -550,6 +870,9 @@ function renderStatus() {
     modeText.textContent = "Great job! All eggs found.";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
     nextBtn.hidden = true;
+    if (shareBtn) {
+      shareBtn.hidden = true;
+    }
     hintBtn.hidden = true;
     hintText.hidden = true;
     completePanel.hidden = false;
@@ -674,6 +997,226 @@ function playWandSfx() {
   playTone({ freq: 520, type: "triangle", duration: 0.1, volume: 0.08 });
   playTone({ freq: 780, type: "sine", duration: 0.13, volume: 0.1, when: 0.05 });
   playTone({ freq: 1120, type: "triangle", duration: 0.16, volume: 0.09, when: 0.11 });
+}
+
+function getNoiseBuffer(ctx) {
+  if (noiseBuffer) {
+    return noiseBuffer;
+  }
+  const length = Math.floor(ctx.sampleRate * 0.6);
+  noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const channel = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) {
+    channel[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+function playNoiseBurst({ when = 0, duration = 0.08, volume = 0.12, highpass = 900, bandpass = 1800, q = 0.8 }) {
+  if (!state.soundEnabled) {
+    return;
+  }
+  const ctx = getAudioContext();
+  if (!ctx) {
+    return;
+  }
+
+  const start = ctx.currentTime + when;
+  const end = start + duration;
+
+  const source = ctx.createBufferSource();
+  source.buffer = getNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(highpass, start);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(bandpass, start);
+  bp.Q.setValueAtTime(q, start);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+  source.connect(hp);
+  hp.connect(bp);
+  bp.connect(gain);
+  gain.connect(ctx.destination);
+
+  source.start(start);
+  source.stop(end + 0.02);
+}
+
+function playHoorayVoice({ baseFreq = 440, when = 0, volume = 0.055 }) {
+  playTone({
+    freq: baseFreq,
+    type: "triangle",
+    duration: 0.22,
+    volume,
+    when,
+    sweepTo: baseFreq * 1.45,
+  });
+  playTone({
+    freq: baseFreq * 1.48,
+    type: "sine",
+    duration: 0.2,
+    volume: volume * 0.82,
+    when: when + 0.03,
+    sweepTo: baseFreq * 2.05,
+  });
+}
+
+function playCelebrationSfx() {
+  playNoiseBurst({ when: 0.0, duration: 0.07, volume: 0.13, highpass: 900, bandpass: 1900, q: 0.9 });
+  playNoiseBurst({ when: 0.12, duration: 0.07, volume: 0.12, highpass: 1000, bandpass: 2200, q: 0.8 });
+  playNoiseBurst({ when: 0.28, duration: 0.08, volume: 0.14, highpass: 850, bandpass: 1700, q: 1.0 });
+  playNoiseBurst({ when: 0.42, duration: 0.08, volume: 0.13, highpass: 950, bandpass: 2100, q: 0.85 });
+  playHoorayVoice({ baseFreq: 420, when: 0.18, volume: 0.058 });
+  playHoorayVoice({ baseFreq: 470, when: 0.22, volume: 0.056 });
+  playHoorayVoice({ baseFreq: 520, when: 0.26, volume: 0.052 });
+  playHoorayVoice({ baseFreq: 500, when: 0.56, volume: 0.06 });
+  playHoorayVoice({ baseFreq: 560, when: 0.6, volume: 0.057 });
+  playHoorayVoice({ baseFreq: 620, when: 0.64, volume: 0.053 });
+}
+
+function stopCelebrationFireworks() {
+  if (celebrationRaf) {
+    cancelAnimationFrame(celebrationRaf);
+    celebrationRaf = null;
+  }
+  if (celebrationResizeHandler) {
+    window.removeEventListener("resize", celebrationResizeHandler);
+    celebrationResizeHandler = null;
+  }
+  celebrationParticles = [];
+  celebrationCtx = null;
+  if (celebrationCanvas) {
+    celebrationCanvas.remove();
+    celebrationCanvas = null;
+  }
+}
+
+function shouldReduceMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function resizeCelebrationCanvas() {
+  if (!celebrationCanvas || !celebrationCtx) {
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  celebrationCanvas.width = Math.floor(width * dpr);
+  celebrationCanvas.height = Math.floor(height * dpr);
+  celebrationCanvas.style.width = `${width}px`;
+  celebrationCanvas.style.height = `${height}px`;
+  celebrationCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function spawnFireworkBurst() {
+  if (!celebrationCanvas) {
+    return;
+  }
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const x = width * (0.15 + Math.random() * 0.7);
+  const y = height * (0.12 + Math.random() * 0.38);
+  const pieces = 38 + Math.floor(Math.random() * 18);
+
+  for (let i = 0; i < pieces; i += 1) {
+    const angle = (Math.PI * 2 * i) / pieces + (Math.random() - 0.5) * 0.22;
+    const speed = 100 + Math.random() * 240;
+    celebrationParticles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 30,
+      life: 0,
+      ttl: 0.9 + Math.random() * 0.75,
+      size: 1.8 + Math.random() * 2.8,
+      color: FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)],
+    });
+  }
+}
+
+function drawCelebrationFrame(now) {
+  if (!celebrationCtx || !celebrationCanvas) {
+    return;
+  }
+  const dt = Math.min(0.033, (now - celebrationLastFrameAt) / 1000 || 0.016);
+  celebrationLastFrameAt = now;
+
+  if (now >= celebrationNextBurstAt && celebrationBurstCount < 7) {
+    spawnFireworkBurst();
+    celebrationBurstCount += 1;
+    celebrationNextBurstAt = now + 200 + Math.random() * 180;
+  }
+
+  const gravity = 460;
+  celebrationParticles = celebrationParticles.filter((p) => {
+    p.life += dt;
+    if (p.life >= p.ttl) {
+      return false;
+    }
+    p.vy += gravity * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    return true;
+  });
+
+  celebrationCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  for (const p of celebrationParticles) {
+    const alpha = 1 - p.life / p.ttl;
+    celebrationCtx.globalAlpha = alpha;
+    celebrationCtx.fillStyle = p.color;
+    celebrationCtx.beginPath();
+    celebrationCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    celebrationCtx.fill();
+  }
+  celebrationCtx.globalAlpha = 1;
+
+  const elapsed = now - celebrationStartedAt;
+  if (elapsed < 2200 || celebrationParticles.length > 0) {
+    celebrationRaf = requestAnimationFrame(drawCelebrationFrame);
+    return;
+  }
+  stopCelebrationFireworks();
+}
+
+function startCelebrationFireworks() {
+  stopCelebrationFireworks();
+  if (shouldReduceMotion()) {
+    return;
+  }
+
+  celebrationCanvas = document.createElement("canvas");
+  celebrationCanvas.setAttribute("aria-hidden", "true");
+  celebrationCanvas.style.position = "fixed";
+  celebrationCanvas.style.inset = "0";
+  celebrationCanvas.style.pointerEvents = "none";
+  celebrationCanvas.style.zIndex = "80";
+  document.body.appendChild(celebrationCanvas);
+
+  celebrationCtx = celebrationCanvas.getContext("2d");
+  if (!celebrationCtx) {
+    stopCelebrationFireworks();
+    return;
+  }
+
+  celebrationResizeHandler = () => resizeCelebrationCanvas();
+  window.addEventListener("resize", celebrationResizeHandler);
+  resizeCelebrationCanvas();
+
+  celebrationParticles = [];
+  celebrationBurstCount = 0;
+  celebrationStartedAt = performance.now();
+  celebrationLastFrameAt = celebrationStartedAt;
+  celebrationNextBurstAt = celebrationStartedAt;
+  celebrationRaf = requestAnimationFrame(drawCelebrationFrame);
 }
 
 function clamp(value, min, max) {
@@ -1432,6 +1975,8 @@ function finishHunt() {
   state.mode = "complete";
   showScreen("game");
   renderStatus();
+  startCelebrationFireworks();
+  playCelebrationSfx();
   trackEvent("huntsCompleted");
   schedulePersistRuntimeState();
 }
@@ -1474,6 +2019,9 @@ propToolBtn.addEventListener("click", () => {
   renderStatus();
 });
 nextBtn.addEventListener("click", startFindMode);
+if (shareBtn) {
+  shareBtn.addEventListener("click", openShareModal);
+}
 hintBtn.addEventListener("click", useHint);
 restartBtn.addEventListener("click", () => {
   closeHelpModal();
@@ -1483,14 +2031,30 @@ playAgainBtn.addEventListener("click", replayCurrentHunt);
 newHuntBtn.addEventListener("click", resetRound);
 helpBtn.addEventListener("click", openHelpModal);
 helpCloseBtn.addEventListener("click", closeHelpModal);
+if (shareCopyDraftBtn) {
+  shareCopyDraftBtn.addEventListener("click", () => {
+    copyShareDraft();
+  });
+}
+if (shareCloseBtn) {
+  shareCloseBtn.addEventListener("click", closeShareModal);
+}
 helpModal.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.dataset.closeModal === "true") {
     closeHelpModal();
   }
 });
+if (shareModal) {
+  shareModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.dataset.closeShare === "true") {
+      closeShareModal();
+    }
+  });
+}
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeHelpModal();
+    closeShareModal();
   }
 });
 
@@ -1613,6 +2177,9 @@ window.addEventListener("orientationchange", updateRotateOverlay);
 
 async function initializeApp() {
   try {
+    if (loadSharedHuntFromUrl()) {
+      return;
+    }
     restoreRuntimeState();
     renderThemePicker();
     renderPropPicker();

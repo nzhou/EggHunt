@@ -795,6 +795,28 @@ button:disabled {
   gap: 6px;
 }
 
+.share-modal-content {
+  gap: 8px;
+}
+
+.share-draft {
+  width: 100%;
+  min-height: 148px;
+  resize: none;
+  border-radius: 12px;
+  border: 2px solid #e1e8f2;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.share-status {
+  min-height: 1.2em;
+  font-size: 13px;
+  color: #2f9b72;
+}
+
 .toast {
   position: fixed;
   bottom: max(12px, env(safe-area-inset-bottom));
