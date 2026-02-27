@@ -39,6 +39,8 @@ const EGG_ASSET_PATHS = [
   "assets/eggs/egg04.png",
   "assets/eggs/egg05.png",
 ];
+const EGG_MIN_COUNT = 3;
+const EGG_MAX_COUNT = 12;
 
 const PROP_ASSET_MAP = {
   basket: "assets/props/prop_basket.png?v=4",
@@ -79,7 +81,8 @@ const PROP_ICON_MAP = {
 const setupScreen = document.getElementById("setupScreen");
 const gameScreen = document.getElementById("gameScreen");
 const themePicker = document.getElementById("themePicker");
-const eggCountInput = document.getElementById("eggCount");
+const eggMinusBtn = document.getElementById("eggMinusBtn");
+const eggPlusBtn = document.getElementById("eggPlusBtn");
 const eggCountValue = document.getElementById("eggCountValue");
 const startHideBtn = document.getElementById("startHideBtn");
 const scene = document.getElementById("scene");
@@ -107,9 +110,19 @@ const completePanel = document.getElementById("completePanel");
 let audioCtx = null;
 let bgmAudio = null;
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function setEggCount(value) {
+  state.totalEggs = clamp(Number(value) || EGG_MIN_COUNT, EGG_MIN_COUNT, EGG_MAX_COUNT);
+  eggCountValue.textContent = String(state.totalEggs);
+}
+
 function showScreen(name) {
   setupScreen.classList.toggle("active", name === "setup");
   gameScreen.classList.toggle("active", name === "game");
+  restartBtn.hidden = name === "setup";
 }
 
 function updateSoundButton() {
@@ -155,7 +168,7 @@ function syncBackgroundMusic() {
 
 function resetRound() {
   state.mode = "setup";
-  state.totalEggs = Number(eggCountInput.value);
+  setEggCount(state.totalEggs);
   state.eggs = [];
   state.sceneObjects = [];
   state.nextObjectId = 1;
@@ -175,7 +188,7 @@ function resetRound() {
 
 function startHideMode() {
   state.mode = "hide";
-  state.totalEggs = Number(eggCountInput.value);
+  setEggCount(state.totalEggs);
   state.eggs = [];
   state.sceneObjects = [];
   state.nextObjectId = 1;
@@ -198,10 +211,13 @@ function startFindMode() {
   renderStatus();
 }
 
-function replayCurrentHunt() {
+function replayCurrentHunt(options = {}) {
+  const { resetWands = true } = options;
   state.mode = "find";
   state.foundCount = 0;
-  state.wandUses = 3;
+  if (resetWands) {
+    state.wandUses = 3;
+  }
   state.eggs.forEach((egg) => {
     egg.found = false;
     egg.foundAt = null;
@@ -238,8 +254,8 @@ function renderStatus() {
   if (state.mode === "find") {
     modeText.textContent = "Find Mode: tap to find eggs";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
-    nextBtn.disabled = true;
-    nextBtn.textContent = "Pass to Finder";
+    nextBtn.disabled = false;
+    nextBtn.textContent = "Restart the Hunt";
     nextBtn.hidden = false;
     hintBtn.hidden = false;
     hintBtn.disabled = state.wandUses < 1;
@@ -998,8 +1014,12 @@ function finishHunt() {
   renderStatus();
 }
 
-eggCountInput.addEventListener("input", () => {
-  eggCountValue.textContent = eggCountInput.value;
+eggMinusBtn.addEventListener("click", () => {
+  setEggCount(state.totalEggs - 1);
+});
+
+eggPlusBtn.addEventListener("click", () => {
+  setEggCount(state.totalEggs + 1);
 });
 
 soundToggleBtn.addEventListener("click", () => {
@@ -1024,7 +1044,15 @@ propToolBtn.addEventListener("click", () => {
   state.hideTool = "props";
   renderStatus();
 });
-nextBtn.addEventListener("click", startFindMode);
+nextBtn.addEventListener("click", () => {
+  if (state.mode === "hide") {
+    startFindMode();
+    return;
+  }
+  if (state.mode === "find") {
+    replayCurrentHunt();
+  }
+});
 hintBtn.addEventListener("click", useHint);
 restartBtn.addEventListener("click", resetRound);
 playAgainBtn.addEventListener("click", replayCurrentHunt);
@@ -1099,6 +1127,7 @@ if (savedMusicEnabled === "0") {
 updateMusicButton();
 updateSoundButton();
 syncBackgroundMusic();
+setEggCount(state.totalEggs);
 document.addEventListener(
   "pointerdown",
   () => {

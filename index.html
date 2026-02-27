@@ -13,7 +13,7 @@
         <div class="topbar-actions">
           <button id="musicToggleBtn" class="ghost" type="button" aria-pressed="false">🎵 Music On</button>
           <button id="soundToggleBtn" class="ghost" type="button" aria-pressed="false">🔊 Sound On</button>
-          <button id="restartBtn" class="ghost">Start Over</button>
+          <button id="restartBtn" class="ghost" type="button" aria-label="Start over" title="Start over">↺ Start Over</button>
         </div>
       </header>
 
@@ -26,12 +26,17 @@
         </div>
 
         <div class="field">
-          <label for="eggCount">How many eggs?</label>
-          <input id="eggCount" type="range" min="3" max="12" value="6" />
-          <p><strong id="eggCountValue">6</strong> eggs</p>
+          <div class="stepper-row">
+            <span class="egg-count-label">How many eggs?</span>
+            <div class="stepper" aria-label="Egg count control">
+              <button id="eggMinusBtn" class="ghost" type="button" aria-label="Decrease egg count">−</button>
+              <output id="eggCountValue" for="eggMinusBtn eggPlusBtn">6</output>
+              <button id="eggPlusBtn" class="ghost" type="button" aria-label="Increase egg count">+</button>
+            </div>
+          </div>
         </div>
 
-        <button id="startHideBtn" class="primary">Start Hiding Eggs</button>
+        <button id="startHideBtn" class="primary setup-start-btn">Start Hiding Eggs</button>
       </section>
 
       <section id="gameScreen" class="screen" aria-live="polite">

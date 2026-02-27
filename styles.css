@@ -65,6 +65,49 @@ p {
   margin-top: 12px;
 }
 
+.stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.stepper output {
+  min-width: 56px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e334f;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid #e7edf5;
+  border-radius: 12px;
+  padding: 4px 8px;
+}
+
+.egg-count-label {
+  font-weight: 700;
+  margin: 0;
+}
+
+.setup-start-btn {
+  display: block;
+  margin: 18px auto 0;
+}
+
 .theme-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -111,8 +154,7 @@ label {
   margin-bottom: 6px;
 }
 
-select,
-input[type="range"] {
+select {
   width: 100%;
 }
 
@@ -157,6 +199,19 @@ button:disabled {
   display: grid;
   gap: 4px;
   margin-bottom: 10px;
+}
+
+.statusbar p {
+  min-height: 1.25em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusbar #hintText[hidden] {
+  display: block !important;
+  visibility: hidden;
 }
 
 .hide-tools {
