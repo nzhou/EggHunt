@@ -118,6 +118,7 @@ let celebrationLastFrameAt = 0;
 let celebrationBurstCount = 0;
 let celebrationNextBurstAt = 0;
 let celebrationResizeHandler = null;
+let noiseBuffer = null;
 const FIREWORK_COLORS = ["#ff6b6b", "#ffd166", "#06d6a0", "#4cc9f0", "#f72585", "#f9844a"];
 
 function clamp(value, min, max) {
@@ -528,6 +529,76 @@ function playTone({ freq, type = "sine", duration = 0.16, volume = 0.2, sweepTo 
   osc.stop(end + 0.01);
 }
 
+function getNoiseBuffer(ctx) {
+  if (noiseBuffer) {
+    return noiseBuffer;
+  }
+  const length = Math.floor(ctx.sampleRate * 0.6);
+  noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const channel = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) {
+    channel[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+function playNoiseBurst({ when = 0, duration = 0.08, volume = 0.12, highpass = 900, bandpass = 1800, q = 0.8 }) {
+  if (!state.soundEnabled) {
+    return;
+  }
+  const ctx = getAudioContext();
+  if (!ctx) {
+    return;
+  }
+
+  const start = ctx.currentTime + when;
+  const end = start + duration;
+
+  const source = ctx.createBufferSource();
+  source.buffer = getNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(highpass, start);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(bandpass, start);
+  bp.Q.setValueAtTime(q, start);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+  source.connect(hp);
+  hp.connect(bp);
+  bp.connect(gain);
+  gain.connect(ctx.destination);
+
+  source.start(start);
+  source.stop(end + 0.02);
+}
+
+function playHoorayVoice({ baseFreq = 440, when = 0, volume = 0.055 }) {
+  playTone({
+    freq: baseFreq,
+    type: "triangle",
+    duration: 0.22,
+    volume,
+    when,
+    sweepTo: baseFreq * 1.45,
+  });
+  playTone({
+    freq: baseFreq * 1.48,
+    type: "sine",
+    duration: 0.2,
+    volume: volume * 0.82,
+    when: when + 0.03,
+    sweepTo: baseFreq * 2.05,
+  });
+}
+
 function playEggFoundSfx() {
   playTone({ freq: 740, type: "triangle", duration: 0.14, volume: 0.17 });
   playTone({ freq: 988, type: "triangle", duration: 0.2, volume: 0.15, when: 0.09 });
@@ -549,11 +620,24 @@ function playWandSfx() {
 }
 
 function playCelebrationSfx() {
-  playTone({ freq: 660, type: "triangle", duration: 0.12, volume: 0.08, when: 0 });
-  playTone({ freq: 880, type: "triangle", duration: 0.12, volume: 0.08, when: 0.09 });
-  playTone({ freq: 1108, type: "triangle", duration: 0.14, volume: 0.085, when: 0.18 });
-  playTone({ freq: 1320, type: "sine", duration: 0.16, volume: 0.075, when: 0.31 });
-  playTone({ freq: 1760, type: "sine", duration: 0.22, volume: 0.065, when: 0.45, sweepTo: 2093 });
+  // Hand-clap style hits (noise bursts).
+  playNoiseBurst({ when: 0.0, duration: 0.07, volume: 0.13, highpass: 900, bandpass: 1900, q: 0.9 });
+  playNoiseBurst({ when: 0.12, duration: 0.07, volume: 0.12, highpass: 1000, bandpass: 2200, q: 0.8 });
+  playNoiseBurst({ when: 0.28, duration: 0.08, volume: 0.14, highpass: 850, bandpass: 1700, q: 1.0 });
+  playNoiseBurst({ when: 0.42, duration: 0.08, volume: 0.13, highpass: 950, bandpass: 2100, q: 0.85 });
+
+  // "Hooray" crowd-like shouts (stacked upward sweeps).
+  playHoorayVoice({ baseFreq: 420, when: 0.18, volume: 0.058 });
+  playHoorayVoice({ baseFreq: 470, when: 0.22, volume: 0.056 });
+  playHoorayVoice({ baseFreq: 520, when: 0.26, volume: 0.052 });
+
+  playHoorayVoice({ baseFreq: 500, when: 0.56, volume: 0.06 });
+  playHoorayVoice({ baseFreq: 560, when: 0.6, volume: 0.057 });
+  playHoorayVoice({ baseFreq: 620, when: 0.64, volume: 0.053 });
+
+  // Extra applause tail.
+  playNoiseBurst({ when: 0.84, duration: 0.09, volume: 0.11, highpass: 900, bandpass: 1800, q: 0.85 });
+  playNoiseBurst({ when: 0.98, duration: 0.08, volume: 0.1, highpass: 1000, bandpass: 2100, q: 0.8 });
 }
 
 function clamp(value, min, max) {
