@@ -12,6 +12,8 @@ const state = {
   selectedItem: null,
   dragging: null,
   foundCount: 0,
+  findStartEggs: [],
+  findStartSceneObjects: [],
   wandUses: 3,
   soundEnabled: true,
   musicEnabled: true,
@@ -71,6 +73,7 @@ const COMMON_PROP_KINDS = [
   "storybook",
   "toy",
 ];
+const MAX_PROPS_PER_KIND = 3;
 
 const PROP_ICON_MAP = {
   bunny: "🐇",
@@ -518,6 +521,7 @@ function loadSharedHuntFromUrl() {
     state.selectedItem = null;
     state.dragging = null;
     state.foundCount = 0;
+    snapshotFindStartState();
     state.wandUses = 3;
     state.mode = "find";
     showScreen("game");
@@ -645,6 +649,8 @@ function persistRuntimeState() {
     hideTool: state.hideTool,
     selectedPropKind: state.selectedPropKind,
     foundCount: state.foundCount,
+    findStartEggs: state.findStartEggs,
+    findStartSceneObjects: state.findStartSceneObjects,
     wandUses: state.wandUses,
     soundEnabled: state.soundEnabled,
     musicEnabled: state.musicEnabled,
@@ -678,6 +684,8 @@ function applySnapshot(snapshot) {
   state.selectedItem = null;
   state.dragging = null;
   state.foundCount = Number(snapshot.foundCount) || 0;
+  state.findStartEggs = Array.isArray(snapshot.findStartEggs) ? snapshot.findStartEggs : [];
+  state.findStartSceneObjects = Array.isArray(snapshot.findStartSceneObjects) ? snapshot.findStartSceneObjects : [];
   state.wandUses = Number(snapshot.wandUses);
   if (!Number.isFinite(state.wandUses)) {
     state.wandUses = 3;
@@ -687,6 +695,8 @@ function applySnapshot(snapshot) {
 
   state.eggs.forEach((egg) => normalizeEgg(egg));
   state.sceneObjects.forEach((prop) => normalizeProp(prop));
+  state.findStartEggs.forEach((egg) => normalizeEgg(egg));
+  state.findStartSceneObjects.forEach((prop) => normalizeProp(prop));
 
   setEggCount(state.totalEggs);
 }
@@ -750,6 +760,8 @@ function resetRound() {
   state.selectedItem = null;
   state.dragging = null;
   state.foundCount = 0;
+  state.findStartEggs = [];
+  state.findStartSceneObjects = [];
   state.wandUses = 3;
   renderThemePicker();
   renderPropPicker();
@@ -774,6 +786,8 @@ function startHideMode() {
   state.selectedItem = null;
   state.dragging = null;
   state.foundCount = 0;
+  state.findStartEggs = [];
+  state.findStartSceneObjects = [];
   state.wandUses = 3;
   showScreen("game");
   renderPropPicker();
@@ -784,6 +798,7 @@ function startHideMode() {
 }
 
 function startFindMode() {
+  snapshotFindStartState();
   state.mode = "find";
   renderScene();
   renderStatus();
@@ -795,10 +810,22 @@ function replayCurrentHunt() {
   state.mode = "find";
   state.foundCount = 0;
   state.wandUses = 3;
-  state.eggs.forEach((egg) => {
-    egg.found = false;
-    egg.foundAt = null;
-  });
+  if (state.findStartEggs.length > 0) {
+    state.eggs = state.findStartEggs.map((egg) => cloneEggState(egg));
+    state.sceneObjects = state.findStartSceneObjects.map((prop) => clonePropState(prop));
+    state.eggs.forEach((egg) => normalizeEgg(egg));
+    state.sceneObjects.forEach((prop) => normalizeProp(prop));
+    const maxPropId = state.sceneObjects.reduce((maxId, prop) => Math.max(maxId, Number(prop.id) || 0), 0);
+    state.nextObjectId = Math.max(1, maxPropId + 1);
+  } else {
+    state.eggs.forEach((egg) => {
+      egg.found = false;
+      egg.foundAt = null;
+    });
+    state.sceneObjects.forEach((prop) => {
+      delete prop.removing;
+    });
+  }
   state.selectedItem = null;
   state.dragging = null;
   showScreen("game");
@@ -845,9 +872,9 @@ function renderStatus() {
     }
     modeText.textContent = "Find Mode: Tap to find eggs.";
     counterText.textContent = `Found: ${state.foundCount}/${state.totalEggs}`;
-    nextBtn.disabled = true;
-    nextBtn.textContent = "Pass to Finder";
-    nextBtn.hidden = true;
+    nextBtn.disabled = false;
+    nextBtn.textContent = "Restart the Hunt";
+    nextBtn.hidden = false;
     if (shareBtn) {
       shareBtn.hidden = true;
     }
@@ -900,6 +927,38 @@ function randomPattern() {
 
 function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function cloneEggState(egg) {
+  return {
+    x: egg.x,
+    y: egg.y,
+    found: false,
+    foundAt: null,
+    pattern: egg.pattern,
+    asset: egg.asset,
+    scale: egg.scale,
+    rotate: egg.rotate,
+    flipX: egg.flipX,
+    hitRadius: egg.hitRadius,
+  };
+}
+
+function clonePropState(prop) {
+  return {
+    id: prop.id,
+    kind: prop.kind,
+    x: prop.x,
+    y: prop.y,
+    scale: prop.scale,
+    rotate: prop.rotate,
+    flipX: prop.flipX,
+  };
+}
+
+function snapshotFindStartState() {
+  state.findStartEggs = state.eggs.map((egg) => cloneEggState(egg));
+  state.findStartSceneObjects = state.sceneObjects.map((prop) => clonePropState(prop));
 }
 
 function randomEggScale() {
@@ -1228,6 +1287,14 @@ function propHitRadius(prop) {
   return 6.3 * (prop.scale ?? 1);
 }
 
+function getPropCountByKind(kind) {
+  return state.sceneObjects.reduce((count, prop) => count + (prop.kind === kind ? 1 : 0), 0);
+}
+
+function getRemainingPropsByKind(kind) {
+  return Math.max(0, MAX_PROPS_PER_KIND - getPropCountByKind(kind));
+}
+
 function getSelectedObject() {
   if (!state.selectedItem) {
     return null;
@@ -1348,6 +1415,8 @@ function beginShelfGhostDrag({ sourceType, index, kind, asset, pointerId, event 
     moved: false,
     startX: event.clientX,
     startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
   };
   if (!dragGhost) {
     activateTapPlaceFallback();
@@ -1376,6 +1445,11 @@ function attachShelfInteraction(button, config) {
       event,
       index: config.getIndex(),
     });
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch {
+      // Some devices/webviews do not support capture reliably.
+    }
   });
 }
 
@@ -1383,6 +1457,8 @@ function handleGlobalShelfPointerMove(event) {
   if (!shelfDragState || shelfDragState.pointerId !== event.pointerId || shelfDragState.stage !== "ghost") {
     return;
   }
+  shelfDragState.lastX = event.clientX;
+  shelfDragState.lastY = event.clientY;
   const dx = event.clientX - shelfDragState.startX;
   const dy = event.clientY - shelfDragState.startY;
   if (dx * dx + dy * dy > 36) {
@@ -1399,22 +1475,24 @@ function handleGlobalShelfPointerUp(event) {
   if (current.stage !== "ghost") {
     return;
   }
+  const eventX = Number.isFinite(event.clientX) ? event.clientX : current.lastX;
+  const eventY = Number.isFinite(event.clientY) ? event.clientY : current.lastY;
   const rect = scene.getBoundingClientRect();
   const insideScene =
-    event.clientX >= rect.left &&
-    event.clientX <= rect.right &&
-    event.clientY >= rect.top &&
-    event.clientY <= rect.bottom;
+    eventX >= rect.left &&
+    eventX <= rect.right &&
+    eventY >= rect.top &&
+    eventY <= rect.bottom;
   if (insideScene) {
-    const point = sceneCoordsFromClient(event.clientX, event.clientY);
+    const point = sceneCoordsFromClient(eventX, eventY);
     if (current.sourceType === "egg") {
       placeEggFromShelf(current.index, point);
     } else {
       placePropFromShelf(current.kind, point);
     }
   } else {
-    const upDx = event.clientX - current.startX;
-    const upDy = event.clientY - current.startY;
+    const upDx = eventX - current.startX;
+    const upDy = eventY - current.startY;
     const movedEnough = current.moved || upDx * upDx + upDy * upDy > 36;
     if (!movedEnough) {
       queueTapPlacement(current.sourceType, current.index, current.kind || null);
@@ -1433,13 +1511,16 @@ function renderPropPicker() {
   if (state.mode !== "hide" || state.hideTool !== "props") {
     return;
   }
-  propShelfLabel.textContent = "Prop Shelf (press-hold and drop)";
+  propShelfLabel.textContent = "Prop Shelf";
 
   COMMON_PROP_KINDS.forEach((kind) => {
+    const remaining = getRemainingPropsByKind(kind);
     const propEl = document.createElement("button");
     propEl.type = "button";
     propEl.className = "shelf-prop";
     propEl.dataset.kind = kind;
+    propEl.disabled = remaining < 1;
+    propEl.setAttribute("aria-label", `${kind.replace("-", " ")} (${remaining} left)`);
     propEl.title = `Press and hold to place ${kind.replace("-", " ")}`;
     const propAsset = PROP_ASSET_MAP[kind];
     if (propAsset) {
@@ -1451,6 +1532,10 @@ function renderPropPicker() {
       label.textContent = PROP_ICON_MAP[kind] || kind.replace("-", " ");
       propEl.appendChild(label);
     }
+    const countEl = document.createElement("span");
+    countEl.className = "shelf-prop-count";
+    countEl.textContent = String(remaining);
+    propEl.appendChild(countEl);
     attachShelfInteraction(propEl, {
       sourceType: "prop",
       kind,
@@ -1571,6 +1656,10 @@ function returnEggToShelf(eggIndex) {
 
 function placePropFromShelf(kind, point) {
   if (!COMMON_PROP_KINDS.includes(kind)) {
+    return;
+  }
+  if (getRemainingPropsByKind(kind) < 1) {
+    showToast("That prop is out for this hunt.");
     return;
   }
   const prop = {
@@ -2019,7 +2108,15 @@ propToolBtn.addEventListener("click", () => {
   state.hideTool = "props";
   renderStatus();
 });
-nextBtn.addEventListener("click", startFindMode);
+nextBtn.addEventListener("click", () => {
+  if (state.mode === "hide") {
+    startFindMode();
+    return;
+  }
+  if (state.mode === "find") {
+    replayCurrentHunt();
+  }
+});
 if (shareBtn) {
   shareBtn.addEventListener("click", openShareModal);
 }
